@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 01 — wordkit</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible) */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal:nth-of-type(odd) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>wordkit</h1>
+  <p class="subtitle">Go101 · Project 01 — a <code>wc</code>-style text analyzer CLI</p>
+  <div class="badge-row">
+    <span class="badge tier">Beginner Tier</span>
+    <span class="badge">Program anatomy</span>
+    <span class="badge">Packages</span>
+    <span class="badge">Error values vs exceptions</span>
+    <span class="badge">io.Reader / io.Writer</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: pure standard library</h3>
+  <p>wordkit uses exactly four stdlib packages — <code>os</code>, <code>bufio</code>, <code>flag</code>,
+     and <code>io</code> — plus <code>fmt</code> and <code>unicode</code>. No third-party dependencies,
+     no <code>go get</code>, no module proxy round-trips. This is deliberate: project 01 is your first
+     Go program, and every import you don't recognize is friction between you and the language.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in wordkit</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>os</code></td><td><code>os.Stdin</code>, <code>os.Open</code>, <code>os.Exit</code>, stderr</td><td>Files are just Readers; exit codes communicate failure to shells</td></tr>
+      <tr><td><code>bufio</code></td><td>Buffered rune reading over any Reader</td><td>Streaming I/O with constant memory</td></tr>
+      <tr><td><code>flag</code></td><td><code>-l -w -c -m</code> column flags</td><td>The standard CLI argument contract</td></tr>
+      <tr><td><code>io</code></td><td><code>io.Reader</code>, <code>io.EOF</code></td><td><strong>The central abstraction of Go I/O</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>cobra / urfave-cli</strong> — excellent production flag frameworks, but they hide
+        exactly what this lesson teaches: how argument parsing works, how <code>flag.Args()</code>
+        yields positional arguments, how a CLI composes flags with plain functions. You'll appreciate
+        cobra more after you've written without it. Later projects reintroduce richer tooling where
+        it earns its complexity.</li>
+    <li><strong>Any counting library / regex approach</strong> — counting words via
+        <code>regexp</code> would work but obscures the byte-level streaming loop that is the point
+        of this project, and pays regex compilation cost per run.</li>
+    <li><strong>Loading the whole input into memory</strong> — trivially simpler, but fails the
+        core constraint: constant memory regardless of input size (see Architecture).</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>The <code>io.Reader</code> abstraction.</strong> One function —
+        <code>Analyze(r io.Reader)</code> — handles stdin, files, network streams, and test strings
+        alike. Nothing else in beginner Go demonstrates dependency inversion this concretely.</li>
+    <li><strong>Error as value.</strong> No exceptions exist in Go. Errors come back as a second
+        return value, are compared against sentinels like <code>io.EOF</code>, and are wrapped with
+        context. wordkit's read loop is a textbook exercise in all three.</li>
+    <li><strong>Program anatomy from scratch.</strong> A complete <code>main</code> package importing
+        its own library package shows the two-package shape nearly every real Go program has:
+        reusable logic in a library, thin wiring in <code>cmd/</code>.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>These are derived directly from <code>wordkit_test.go</code> — the executable specification.
+     If your implementation passes these tests, it satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Count four statistics</strong> over an <code>io.Reader</code>: lines
+        (<code>\n</code> characters), words (whitespace-separated fields per <code>unicode.IsSpace</code>),
+        bytes, and UTF-8 characters.</li>
+    <li><strong>R2 — Final unterminated line counts.</strong> Input <code>"last"</code> with no
+        trailing newline yields <code>Lines: 4</code> in the multi-line case — wc-compatible behavior.</li>
+    <li><strong>R3 — Unicode-aware character count.</strong> <code>"héllo wörld ✓\n"</code> is
+        18 bytes but 14 chars: multi-byte runes count once each.</li>
+    <li><strong>R4 — Invalid UTF-8 degrades gracefully.</strong> Each invalid byte counts as one
+        char (<code>"h\xffi\n"</code>: Bytes 4, Chars 4) rather than erroring out.</li>
+    <li><strong>R5 — Mixed whitespace splits words.</strong> Tabs and multiple spaces separate
+        words; consecutive whitespace produces no empty words.</li>
+    <li><strong>R6 — Empty input → zero stats, nil error.</strong></li>
+    <li><strong>R7 — Format matches <code>wc</code>.</strong> Four space-padded <code>%8d</code>
+        columns in order Lines, Words, Bytes, Chars.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Constant memory.</strong> The 10,000-line large-input test proves streaming:
+      memory must not scale with input size.</li>
+    <li><strong>NF2 — Errors propagate unwrapped-or-wrapped-but-checkable.</strong> A failing reader
+      must surface via <code>errors.Is</code>, and partial stats from a failed read must be zeroed
+      at the point of return.</li>
+    <li><strong>NF3 — CLI behavior:</strong> no args reads stdin; one or more file paths are each
+      analyzed; <code>-l/-w/-c/-m</code> select columns; no flags prints all four; a missing file
+      prints to stderr and exits non-zero while other files still process.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Stats as a flat struct of int64</h3>
+  <pre><code><span class="kw">type</span> <span class="typ">Stats</span> <span class="kw">struct</span> {
+    Lines <span class="typ">int64</span> <span class="com">// count of '\n' characters; a final line without '\n' still counts</span>
+    Words <span class="typ">int64</span> <span class="com">// whitespace-separated fields (unicode.IsSpace)</span>
+    Bytes <span class="typ">int64</span> <span class="com">// total bytes read</span>
+    Chars <span class="typ">int64</span> <span class="com">// UTF-8 rune count; invalid bytes count as one char each</span>
+}</code></pre>
+  <p>A single value struct means <code>Analyze</code> returns one comparable result — the tests can
+     do <code>got != want</code>. <code>int64</code> (not <code>int</code>) makes the counts stable
+     on 32-bit platforms and mirrors how <code>wc</code>-scale tools think about sizes.
+     Structs of zero-value fields need no constructor: <code>var s Stats</code> starts at all zeros,
+     which is exactly the empty-input answer.</p>
+
+  <h3>D2: Streaming, not load-all</h3>
+  <p><code>Analyze</code> wraps the input in a <code>bufio.Reader</code> and walks it one rune at a
+     time. Memory use is the buffer size (~4 KB), whether the input is 10 bytes or 10 GB. The
+     alternative — <code>io.ReadAll</code> then iterate — would double peak memory (the full slice
+     plus whatever produced it) and break NF1. The cost is a slightly more intricate loop with
+     explicit state (<code>inWord</code>, <code>pendingLine</code>) instead of convenient string
+     methods like <code>strings.Fields</code>.</p>
+
+  <h3>D3: Rune-by-rune decoding</h3>
+  <p><code>ReadRune</code> decodes one UTF-8 rune per call and returns its byte width, which gives us
+     both counters in a single pass:</p>
+  <pre><code>c, size, err := br.<span class="fn">ReadRune</span>()
+<span class="kw">if</span> err != <span class="kw">nil</span> {
+    <span class="kw">if</span> err == io.EOF { <span class="kw">break</span> }
+    <span class="kw">return</span> s, fmt.<span class="fn">Errorf</span>(<span class="str">"wordkit: read: %w"</span>, err)
+}
+s.Bytes += <span class="typ">int64</span>(size)
+s.Chars++ <span class="com">// invalid bytes decode as utf8.RuneError with size 1</span></code></pre>
+  <p>This is why invalid UTF-8 "just works": Go's decoder substitutes <code>utf8.RuneError</code>
+     (U+FFFD) with size 1 per bad byte, so each corrupt byte still advances both counters by one —
+     requirement R4 falls out of the strategy rather than being special-cased.</p>
+
+  <h3>D4: Two-state line tracking</h3>
+  <p><code>pendingLine</code> records whether any non-newline content appeared since the last
+     <code>'\n'</code>. At EOF, if it's set, one final line is added. This reproduces
+     <code>wc</code>'s semantics (R2) with a single boolean instead of buffering the last line.</p>
+
+  <h3>D5: Library + cmd split</h3>
+  <pre><code>projects/01-wordkit/
+├── wordkit.go            <span class="com"># package wordkit — stubs you implement</span>
+├── wordkit_test.go       <span class="com"># the executable spec</span>
+└── solution/
+    ├── solution.go       <span class="com"># package solution — reference Analyze/Format</span>
+    └── cmd/wordkit/main.go   <span class="com"># thin CLI wiring</span></code></pre>
+  <p>All logic lives in the library package; <code>main</code> only parses flags, opens files, and
+     formats output. This makes the counting logic testable without spawning processes, and models
+     the layout real Go CLIs use (<code>docker/cli</code>, <code>gh</code> — see sidebar).</p>
+
+  <h3>D6: Per-file isolation in main</h3>
+  <p>The CLI loops over file arguments, and a failed open or analyze sets <code>failed = true</code>
+     but keeps processing remaining files — then exits 1 at the end. Files are closed immediately
+     after analysis via <code>f.Close()</code>, even on the error path, so a many-file invocation
+     never leaks descriptors.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>io.Reader / io.Writer — why they matter</h3>
+  <div class="callout">
+    <p><strong>The idea:</strong> <code>io.Reader</code> is a single-method interface:
+    <code>Read(p []byte) (n int, err error)</code>. Anything that can produce bytes implements it —
+    files, stdin, network connections, compressed streams, in-memory strings. Code written against
+    the interface works with all of them, forever.</p>
+  </div>
+  <p>wordkit's entire engine is one signature:</p>
+  <pre><code><span class="kw">func</span> <span class="fn">Analyze</span>(r io.Reader) (<span class="typ">Stats</span>, <span class="typ">error</span>)</code></pre>
+  <p>Look at how differently the callers feed it:</p>
+  <pre><code><span class="com">// from stdin (main.go):</span>
+solution.<span class="fn">Analyze</span>(os.Stdin)
+
+<span class="com">// from a file (main.go):</span>
+f, _ := os.<span class="fn">Open</span>(name)
+solution.<span class="fn">Analyze</span>(f)
+
+<span class="com">// from a test fixture (wordkit_test.go):</span>
+<span class="fn">Analyze</span>(strings.<span class="fn">NewReader</span>(<span class="str">"hello\n"</span>))</code></pre>
+  <p>An OS file handle, the process's standard input, and a garbage-collected test string — same
+     function, zero adaptation. In exception-flavored languages you'd often see three overloads or
+     a base-class hierarchy here. In Go, it's one interface and one implementation. This pattern —
+     <em>accept interfaces, return concrete types</em> — is the backbone of Go's standard library
+     design, and you will reuse it in every subsequent project.</p>
+  <p><code>io.Writer</code> is the mirror image (<code>Write(p []byte)</code>) — stdout, files,
+     HTTP response bodies, buffers all implement it. wordkit's CLI writes results with
+     <code>fmt.Println</code>, which targets <code>os.Stdout</code>, itself a Writer under the hood.</p>
+
+  <h3>Error values vs exceptions</h3>
+  <p>Go has no try/catch. Fallible operations return an <code>error</code> interface value as their
+     last result; <code>nil</code> means success. Three idioms appear in this project:</p>
+  <ol>
+    <li><strong>Sentinel errors.</strong> <code>io.EOF</code> is a predefined package-level error.
+        The read loop compares against it to detect end-of-input — control flow expressed as an
+        ordinary value comparison:
+        <pre><code><span class="kw">if</span> err == io.EOF {
+    <span class="kw">break</span>
+}</code></pre></li>
+    <li><strong>Wrapping with context.</strong> Rather than returning a bare upstream error,
+        <code>Analyze</code> adds provenance:
+        <pre><code><span class="kw">return</span> s, fmt.<span class="fn">Errorf</span>(<span class="str">"wordkit: read: %w"</span>, err)</code></pre>
+        The <code>%w</code> verb wraps the original error inside the new one, preserving the chain.</li>
+    <li><strong>Checking chains with errors.Is.</strong> Callers never parse message strings; they
+        interrogate the chain:
+        <pre><code><span class="kw">if</span> !errors.<span class="fn">Is</span>(err, sentinel) { ... }</code></pre>
+        <code>errors.Is</code> unwraps through every <code>%w</code> layer until it finds a match.
+        This is precisely what <code>TestAnalyzePropagatesReaderError</code> asserts.</li>
+  </ol>
+  <p>Compare with exceptions: errors here are values in your function signatures — visible in the
+     type system, impossible to forget to declare. The trade-off is verbosity (<code>if err != nil</code>
+     everywhere); Go's bet is that explicitness beats surprise. Notice also the error-path discipline
+     in main: diagnostics go to <strong>stderr</strong> (<code>Fprintln(os.Stderr, ...)</code>), data
+     to stdout, and the exit code tells the shell something failed.</p>
+
+  <h3>bufio — buffered streaming</h3>
+  <p>Raw <code>Read</code> calls have no size guarantee — a reader may hand back 1 byte per call.
+     Reading rune-by-rune straight from a file would mean one syscall per byte. <code>bufio.NewReader</code>
+     inserts a ~4 KB buffer between you and the source: big reads underneath, tiny logical reads on top.
+     <code>br.ReadRune()</code> decodes from memory almost always, dipping into the underlying reader
+     only when the buffer empties. Memory stays constant (NF1) while throughput approaches bulk reads.</p>
+
+  <h3>UTF-8 runes vs bytes</h3>
+  <p>In Go, a <em>byte</em> is a raw octet (<code>uint8</code>); a <em>rune</em> is a Unicode code
+     point (<code>int32</code>). They differ the moment text leaves ASCII: <code>é</code> is one char
+     but two bytes, <code>✓</code> is one char but three. Hence two separate counters — and hence the
+     test case <code>"héllo wörld ✓\n"</code> expecting Bytes&nbsp;18, Chars&nbsp;14. The subtlety worth
+     internalizing: when <code>ReadRune</code> hits a byte that isn't valid UTF-8, it returns
+     <code>utf8.RuneError</code> with size 1 instead of failing. Corrupt input degrades to
+     byte-faithful counting rather than aborting — a small decision with big consequences for tools
+     that must chew arbitrary data.</p>
+
+  <h3>The flag package</h3>
+  <pre><code>lines := flag.<span class="fn">Bool</span>(<span class="str">"l"</span>, <span class="kw">false</span>, <span class="str">"print the newline count"</span>)
+words := flag.<span class="fn">Bool</span>(<span class="str">"w"</span>, <span class="kw">false</span>, <span class="str">"print the word count"</span>)
+flag.<span class="fn">Parse</span>()
+args := flag.<span class="fn">Args</span>() <span class="com">// positional args after flags</span></code></pre>
+  <p>Each <code>flag.Bool</code> registers a boolean flag and returns a <em>pointer</em> to its
+     value — your first encounter with Go pointers-as-out-parameters. After <code>flag.Parse()</code>,
+     <code>*lines</code> holds whether <code>-l</code> was passed, and <code>flag.Args()</code>
+     contains leftover positional arguments (file paths). The convention <code>&lt;name&gt; -l -w
+     file.txt</code> comes free; so does <code>-h</code>/<code>--help</code> with auto-generated
+     usage text. When you later meet cobra in bigger tools, understand that it builds on exactly
+     these primitives.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Table-driven tests</h3>
+  <p>The heart of <code>TestAnalyze</code> is a slice of anonymous structs — name, input, expected
+     stats, expected error — iterated with <code>t.Run</code>:</p>
+  <pre><code><span class="kw">for</span> _, tt := <span class="kw">range</span> tests {
+    t.<span class="fn">Run</span>(tt.name, <span class="kw">func</span>(t *testing.T) {
+        got, err := <span class="fn">Analyze</span>(strings.<span class="fn">NewReader</span>(tt.input))
+        <span class="kw">if</span> (err != <span class="kw">nil</span>) != tt.wantErr {
+            t.<span class="fn">Fatalf</span>(<span class="str">"Analyze() error = %v, wantErr %v"</span>, err, tt.wantErr)
+        }
+        <span class="kw">if</span> got != tt.want {
+            t.<span class="fn">Errorf</span>(<span class="str">"Analyze() = %+v, want %+v"</span>, got, tt.want)
+        }
+    })
+}</code></pre>
+  <p>Why this shape dominates Go testing:</p>
+  <ul>
+    <li>Adding a case is a five-line literal, not a new function.</li>
+    <li><code>t.Run(tt.name, ...)</code> gives each case its own named subtest — failures report
+        <code>TestAnalyze/unicode_chars_differ_from_bytes</code>, pinpointing the case instantly.</li>
+    <li><code>t.Fatalf</code> (abort this subtest) for precondition failures vs <code>t.Errorf</code>
+        (keep going) for assertion failures — a distinction that matters once cases grow checks.</li>
+    <li>Because <code>Stats</code> is comparable, <code>got != want</code> compares all four fields
+        at once. No reflection, no deep-equal needed.</li>
+  </ul>
+
+  <h3>Error-path injection with a fake reader</h3>
+  <p>How do you test "what happens when the disk fails mid-read"? You don't simulate a disk — you
+     exploit R1's abstraction and supply a reader whose <code>Read</code> always fails:</p>
+  <pre><code><span class="com">// errReader always fails, exercising Analyze's error propagation.</span>
+<span class="kw">type</span> <span class="typ">errReader</span> <span class="kw">struct</span>{ err <span class="typ">error</span> }
+
+<span class="kw">func</span> (r errReader) <span class="fn">Read</span>([]<span class="typ">byte</span>) (<span class="typ">int</span>, <span class="typ">error</span>) { <span class="kw">return</span> <span class="num">0</span>, r.err }</code></pre>
+  <p>Nine lines, no mocks framework. Because <code>Analyze</code> accepts any <code>io.Reader</code>,
+     the test injects failure at the exact boundary where real I/O would fail. The assertions check
+     two things: the sentinel survives wrapping (<code>errors.Is</code>) and no misleading partial
+     stats leak out (<code>Bytes == 0</code>). This test is unpassable until your implementation
+     wraps errors correctly — it's the executable form of lesson "error as value."</p>
+
+  <h3>Scale as a test case</h3>
+  <p><code>TestAnalyzeLargeInput</code> builds a ~340 KB synthetic input (10,000 formatted lines)
+     and asserts exact totals. Its purpose isn't performance — it pins down that streaming state
+     machine logic doesn't drift at volume: off-by-one bugs in <code>inWord</code>/<code>pendingLine</code>
+     show up as mismatches in the 50,000-word expectation long before they'd bite in production.</p>
+
+  <h3>Format as its own unit</h3>
+  <p><code>TestFormat</code> verifies the <code>%8d</code> column contract independently of analysis,
+     using asymmetric values (12 / 3456 / 789012 / 34) that expose padding mistakes. Small, boring,
+     essential: formatting regressions are user-visible and trivially cheap to catch.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>wordkit's stack — pure stdlib CLI reading stdin/files, printing to stdout, exiting non-zero
+       on failure — is the exact skeleton of virtually every widely deployed command-line tool
+       written in Go:</p>
+    <ul>
+      <li><strong>Docker CLI</strong> (<code>docker</code>) — container management; built on cobra,
+          which itself builds on the flag mechanics you just used.</li>
+      <li><strong>GitHub CLI</strong> (<code>gh</code>) — GitHub's official terminal client, pure Go,
+          shipped as a static binary for every platform.</li>
+      <li><strong>Terraform &amp; OpenTofu</strong> — infrastructure-as-code engines driving clouds
+          worldwide; a Go binary you download and run.</li>
+      <li><strong>kubectl</strong> — the Kubernetes client, arguably the most-run Go binary on Earth.</li>
+      <li><strong>hugo, ghz, hey, gitleaks</strong> — the long tail: static site generator, load
+          tester, secret scanner. All stdlib-first CLIs.</li>
+    </ul>
+  </div>
+
+  <h3>Why Go dominates the CLI space</h3>
+  <ol>
+    <li><strong>Single static binary.</strong> <code>go build</code> emits one self-contained
+        executable — no runtime install, no interpreter, no dependency resolution at deploy time.
+        Distribution is a download URL.</li>
+    <li><strong>Fast startup.</strong> Compiled to native code with no VM warm-up, Go CLIs start in
+        milliseconds — critical for tools invoked thousands of times in scripts and CI pipelines.</li>
+    <li><strong>Trivial cross-compilation.</strong> <code>GOOS=linux GOARCH=arm64 go build</code>
+        targets another OS/architecture from your laptop. Release matrices that take C toolchains
+        days take Go minutes.</li>
+    <li><strong>Batteries-included stdlib.</strong> As wordkit demonstrates, flag parsing, buffered
+        I/O, and unicode handling ship with the compiler. Many production CLIs stay zero-dependency
+        end to end.</li>
+  </ol>
+  <p>The through-line: the skills in this project — accept <code>io.Reader</code>, propagate errors
+     as values, keep the binary thin — aren't academic exercises. They're the load-bearing habits of
+     tools running on millions of machines right now.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn disabled" aria-disabled="true">&larr; Previous</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 01 of 16</span>
+  <a class="btn" href="02-taskline.html">Next: taskline &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
