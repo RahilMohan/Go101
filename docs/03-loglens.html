@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Go101 · Project 03 — loglens</title>
+<script>document.documentElement.classList.add('js');</script>
 <style>
   :root {
     --bg: #0d1117;
@@ -178,17 +179,21 @@
   /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
   @media (prefers-reduced-motion: no-preference) {
 
-    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible) */
-    .reveal {
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
       opacity: 0;
       transform: translateY(24px);
-      transition: opacity 600ms ease-out, transform 600ms ease-out;
     }
     .reveal.visible {
       opacity: 1;
       transform: translateY(0);
     }
-    .reveal:nth-of-type(odd) { transition-delay: 40ms; }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
 
     /* Subtle gradient pulse on the header tier badge */
     @keyframes badge-pulse {
@@ -219,6 +224,11 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
     * { transition: none !important; animation: none !important; }
   }
 </style>
@@ -377,7 +387,10 @@ sc.<span class="fn">Buffer</span>(<span class="fn">make</span>([]<span class="ty
      false with <code>bufio.ErrTooLong</code> — which, fatally, looks exactly like clean
      end-of-input if you don't check <code>sc.Err()</code>. Real access logs contain URLs far past
      64KB (query-string attacks, deep paths, base64 blobs). The fix is one explicit
-     <code>Buffer</code> call raising the ceiling to 1MB, plus the final
+     <code>Buffer</code> call raising the ceiling to <code>1024 * 1024</code> bytes — an effective
+     maximum of <strong>1,048,575 bytes per line</strong>, since the Scanner reserves one byte of
+     buffer headroom and rejects a token of exactly 1,048,576 with
+     <code>ErrTooLong</code> — plus the final
      <code>if err := sc.Err(); err != nil</code> check so I/O trouble becomes a returned error
      instead of truncated results. This pitfall is why the test suite includes an ~800KB line: it
      proves the limit was raised and proves the implementation didn't take the
@@ -546,7 +559,7 @@ stats.ByPath[m[5]]++</code></pre>
 
   <h3>Mixed fixtures prove the streaming contract</h3>
   <p><code>TestAnalyzeMixedStreaming</code> builds one input containing a valid line, a garbage
-     line, another valid line, a malformed line, and a blank line — five kinds of reality in six
+     line, another valid line, a malformed line, and a blank line — four kinds of reality in five
      lines of text. Then it asserts everything at once:</p>
   <pre><code><span class="kw">var</span> le *<span class="typ">LineError</span>
 <span class="kw">if</span> !errors.<span class="fn">As</span>(err, &amp;le) {
