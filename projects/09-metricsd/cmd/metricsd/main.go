@@ -16,11 +16,13 @@ import (
 func main() {
 	addr := flag.String("addr", ":9090", "listen address")
 	interval := flag.Duration("interval", 15*time.Second, "scrape interval")
+	scrapeTimeout := flag.Duration("scrape-timeout", 10*time.Second, "per-request timeout; bounds how long one hung target can delay the next tick")
 	config := flag.String("config", "", "path to JSON array of ScrapeTarget")
 	flag.Parse()
 
 	// TODO: Implement
 	_ = addr
 	_ = interval
+	_ = scrapeTimeout
 	_ = config
 }

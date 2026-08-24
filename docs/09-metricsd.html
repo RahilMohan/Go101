@@ -380,7 +380,9 @@
   <ul>
     <li><strong>NF1 — Lock-free record hot paths.</strong> Once a metric name exists,
         <code>Inc</code>/<code>Add</code>/<code>SetGauge</code>/<code>Observe</code> never
-        acquire the collector lock again — only atomics.</li>
+        acquire the collector's <em>write</em> lock again — the hot path is a shared
+        <code>RLock</code>'d map probe plus one atomic operation; only first-use registration
+        takes the write lock.</li>
     <li><strong>NF2 — Clean under <code>-race</code>.</strong> All concurrency proofs pass the
         race detector; the scraper's goroutines (loop + per-target fetches) synchronize
         exclusively through the documented locks and atomics.</li>
@@ -491,10 +493,14 @@ mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /history/{name}"</
      <code>http.Handler</code>: the collector's exposition text and the scraper's ring
      history. Note the Go 1.22 features doing quiet work — the method-prefixed patterns
      reject non-GET requests automatically, and <code>r.PathValue("name")</code> extracts the
-     wildcard without a manual string split. The <code>/metrics</code> route propagates
-     Snapshot's writer errors into a real 500 rather than serving truncated output with a
-     200; <code>/history</code> encodes directly to the response writer, streaming. One known
-     limitation is deliberate and worth stating honestly: metric names are written verbatim
+     wildcard without a manual string split. One honesty note about the
+     <code>/metrics</code> route's error handling: Snapshot's error is checked, but by the
+     time it can fail mid-stream net/http has already committed a 200 — the late 500 becomes
+     a superfluous <code>WriteHeader</code> that the stack silently ignores, so a failing
+     writer yields a truncated body with status 200. Atomic status would require buffering
+     the full snapshot before writing; exposition bodies are small and writers rarely fail
+     mid-stream, so the code accepts this. A separate known limitation is deliberate:
+     metric names are written verbatim
      into the exposition output with no validation — a caller passing a name with spaces or
      newlines could produce malformed format. Production libraries validate; this project
      trusts its caller and spends the budget on the concurrency lessons instead.</p>
@@ -605,8 +611,11 @@ latency_count 3                        <span class="com"># number of observation
      ticks. The lower bound catches real bugs (a loop that waits an extra interval, a scrape
      that blocks the next tick); the upper headroom keeps CI honest on loaded machines. The
      deeper design choice feeding it: <code>scrapeAll</code> completes fully before the next
-     ticker fire is processed, so ticks never overlap themselves — a hung target stretches the
-     effective period rather than stacking unbounded goroutine generations. Time-based tests
+     ticker fire is processed, so ticks never overlap themselves — no unbounded goroutine
+     generations stack up. The cost of that choice is head-of-line blocking across targets,
+     which is why each fetch runs under a bounded client (<code>-scrape-timeout</code>, 10s
+     default): one hung target can delay everyone's next tick by at most the timeout instead
+     of freezing all collection forever. Time-based tests
      fail by being too tight far more often than by being too loose; the band exists so the
      test fails only when the code is actually wrong.</p>
 </section>

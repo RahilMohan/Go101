@@ -9,9 +9,9 @@
 // Concurrency design notes:
 //
 //   - Counters are atomic.Int64 values reached through a map. The map
-//     itself needs a lock only on first use of a name; after that,
-//     Inc/Add never touch the lock again — the hot path is a single
-//     atomic add.
+//     needs a lock only on first use of a name; after that the hot
+//     path is a shared RLock'd map probe plus one atomic add — no
+//     write lock, no mutex held during the arithmetic itself.
 //   - Gauges are atomic.Pointer[float64]: last-value-wins via one
 //     pointer swap, no CAS loop needed because there is no
 //     read-modify-write dependency between writes.
