@@ -373,8 +373,9 @@
         watchdogs with huge margins; primary assertions count events (delivered counts, buffer
         contents, closed flags).</li>
     <li><strong>NF4 — Bounded blocking.</strong> Any path that waits (PublishBlocking) is bound
-        by the caller's context; Close may wait only for sends that are themselves already
-        context-bounded.</li>
+        by the caller's context. Close itself never waits on publishers: it closes subscriber
+        channels immediately, and any pending blocking publisher observes the closure and returns
+        (admitted) on its next attempt.</li>
   </ul>
 </section>
 
@@ -383,14 +384,25 @@
   <h2><span class="sec-num">03</span>Architecture Decisions</h2>
 
   <h3>D1: Two-level locking over an owner goroutine</h3>
-  <pre><code><span class="com">// Broker.mu serializes broker-level state. Because Publish holds it</span>
+  <pre><code><span class="com">// Broker.mu serializes broker-level state (the subscriber map,</span>
+<span class="com">// the default policy, the closed flag). Because Publish holds it</span>
 <span class="com">// for the whole fan-out, only one publisher mutates a channel</span>
 <span class="com">// buffer at a time — which is exactly what makes DropOld's</span>
 <span class="com">// "evict one, then send" sequence race-free.</span>
-b.mu.<span class="fn">Lock</span>()
-<span class="kw">defer</span> b.mu.<span class="fn">Unlock</span>()
-<span class="kw">for</span> _, sub := <span class="kw">range</span> b.subs {
-    <span class="kw">if</span> sub.<span class="fn">deliver</span>(msg) { delivered++ }
+
+<span class="kw">func</span> (b *<span class="typ">Broker</span>[T]) <span class="fn">Publish</span>(msg T) <span class="typ">int</span> {
+    b.mu.<span class="fn">Lock</span>()
+    <span class="kw">defer</span> b.mu.<span class="fn">Unlock</span>()
+    <span class="kw">if</span> b.isClosed {
+        <span class="kw">return</span> <span class="num">0</span>
+    }
+    delivered := <span class="num">0</span>
+    <span class="kw">for</span> _, sub := <span class="kw">range</span> b.subs {
+        <span class="kw">if</span> sub.<span class="fn">deliver</span>(msg) {
+            delivered++
+        }
+    }
+    <span class="kw">return</span> delivered
 }</code></pre>
   <p>Two designs were weighed, and the loser is documented in the package comment so you can
      audit the reasoning. An owner goroutine owning all state is the idiomatic-sounding choice —
@@ -403,13 +415,16 @@ b.mu.<span class="fn">Lock</span>()
      <strong>subscriber.mu</strong> guards each channel's closed flag, and its job is subtler:
      making a specific panic impossible.</p>
 
-  <h3>D2: Read-mode locks held across sends — why send-on-closed can't happen</h3>
+  <h3>D2: Read-mode locks around every send attempt — why send-on-closed can't happen</h3>
   <pre><code><span class="kw">func</span> (s *<span class="typ">subscriber</span>[T]) <span class="fn">deliver</span>(msg T) <span class="typ">bool</span> {
     s.mu.<span class="fn">RLock</span>()
     <span class="kw">defer</span> s.mu.<span class="fn">RUnlock</span>()
-    <span class="kw">if</span> s.closed { <span class="kw">return</span> <span class="kw">false</span> }  <span class="com">// lost the race with Unsubscribe/Close</span>
+    <span class="kw">if</span> s.closed {
+        <span class="kw">return</span> <span class="kw">false</span> <span class="com">// lost the race with Unsubscribe/Close</span>
+    }
     <span class="fn">select</span> {
-    <span class="kw">case</span> s.ch &lt;- msg: <span class="kw">return</span> <span class="kw">true</span>
+    <span class="kw">case</span> s.ch &lt;- msg:
+        <span class="kw">return</span> <span class="kw">true</span>
     <span class="kw">default</span>:
     }
     ...
@@ -417,11 +432,19 @@ b.mu.<span class="fn">Lock</span>()
   <p>Go's most feared concurrency panic is <code>send on closed channel</code>, because the
      usual defenses (a boolean flag checked before sending) don't work: the check and the send
      are two operations, and a close can slip between them no matter how carefully you order
-     them. The fix here is structural. Every sender takes the subscriber's RWMutex in
-     <em>read mode</em> for the entire send — including any blocking wait inside
-     <code>blockingDeliver</code>. Closing a channel requires the <em>write</em> mode lock. Since
-     readers and writers exclude each other, a close physically cannot execute while a sender is
-     mid-send, under any interleaving whatsoever. The unsubscribe path shows the discipline:
+     them. The fix here is structural, and it works because of what the locks are held
+     <em>around</em>. Every send attempt takes the subscriber's RWMutex in <em>read mode</em>,
+     checks the closed flag, then performs the send — and every such attempt is a non-blocking
+     select, so each lock hold is instantaneous. Closing a channel requires the <em>write</em>
+     mode lock. Since readers and writers exclude each other, a close physically cannot execute
+     while a sender is inside a send attempt — the check-then-send pair is atomic with respect to
+     close, under any interleaving whatsoever.</p>
+  <p>The subtle part is <code>blockingDeliver</code>, which <em>does</em> wait: it deliberately
+     calls <code>RUnlock()</code> before every wait on ctx/timer, so no lock is ever held across
+     a blocking operation (and Close therefore never stalls behind a pending publisher). Safety
+     survives because each retry loops back through a fresh read-mode critical section — if the
+     subscriber was closed while we waited unlocked, the closed-flag check catches it before any
+     send is attempted. The unsubscribe path shows the same discipline:
      remove from the broker map first (under <code>b.mu</code>) so no future Publish sees the
      subscriber, then take <code>sub.mu</code> write-mode to flip the flag and close. Double-close
      is likewise impossible: the <code>closed</code> flag lives inside the same critical section
@@ -429,14 +452,22 @@ b.mu.<span class="fn">Lock</span>()
 
   <h3>D3: Backpressure as a Policy enum, captured at Subscribe time</h3>
   <pre><code><span class="kw">const</span> (
-    DropNew <span class="typ">Policy</span> = <span class="fn">iota</span>  <span class="com">// full? drop the incoming message (default)</span>
-    DropOld                 <span class="com">// full? evict oldest to admit newest</span>
-    Block                   <span class="com">// caller waits via PublishBlocking until admitted or ctx done</span>
+    <span class="com">// DropNew drops the incoming message when the buffer is full.</span>
+    <span class="com">// This is the default Publish behavior.</span>
+    DropNew <span class="typ">Policy</span> = <span class="fn">iota</span>
+    <span class="com">// DropOld evicts the oldest queued message to admit the new one,</span>
+    <span class="com">// keeping the buffer at capacity with the freshest messages.</span>
+    DropOld
+    <span class="com">// Block makes the caller wait until the message is admitted or</span>
+    <span class="com">// the context is done. Only honored by PublishBlocking; plain</span>
+    <span class="com">// Publish treats Block subscribers like DropNew so that it can</span>
+    <span class="com">// never block.</span>
+    Block
 )
 
 sub := &amp;<span class="typ">subscriber</span>[T]{
     ch:     <span class="fn">make</span>(<span class="kw">chan</span> T, capacity),
-    policy: b.policy,   <span class="com">// captured now; later SetDefaultPolicy won't affect me</span>
+    policy: b.policy,
 }</code></pre>
   <p>Each subscriber snapshots the broker's current default policy when it subscribes. This is a
      deliberate coupling decision: a consumer's tolerance for loss shouldn't change out from
@@ -452,18 +483,23 @@ sub := &amp;<span class="typ">subscriber</span>[T]{
 
   <h3>D4: The PublishBlocking admission protocol</h3>
   <pre><code>b.mu.<span class="fn">Lock</span>()
-<span class="kw">defer</span> ...  <span class="com">// partition subs under the lock:</span>
+<span class="kw">if</span> b.isClosed {
+    b.mu.<span class="fn">Unlock</span>()
+    <span class="kw">return</span> <span class="kw">nil</span>
+}
+blocking := <span class="fn">make</span>([]*<span class="typ">subscriber</span>[T], <span class="num">0</span>, len(b.subs))
 <span class="kw">for</span> _, sub := <span class="kw">range</span> b.subs {
     <span class="kw">if</span> sub.policy == <span class="typ">Block</span> &amp;&amp; !sub.closed {
-        blocking = <span class="fn">append</span>(blocking, sub)  <span class="com">// these gate completion</span>
+        blocking = <span class="fn">append</span>(blocking, sub)
         <span class="kw">continue</span>
     }
-    sub.<span class="fn">deliver</span>(msg)                     <span class="com">// ordinary drop semantics</span>
+    sub.<span class="fn">deliver</span>(msg)
 }
 b.mu.<span class="fn">Unlock</span>()
 
-<span class="com">// then, outside the lock: one goroutine per Block sub,</span>
-<span class="com">// each polling admission every 250µs until admitted / removed / ctx done</span>
+<span class="com">// ... one goroutine per Block sub, each polling admission every</span>
+<span class="com">// 250µs until admitted / removed / ctx done ...</span>
+
 wg.<span class="fn">Wait</span>()</code></pre>
   <p>Blocking delivery has to answer a hard question: the broker cannot observe consumers
      receiving from their channels — callers own those channels directly — so "wait for room"
@@ -484,9 +520,9 @@ wg.<span class="fn">Wait</span>()</code></pre>
   <pre><code><span class="kw">if</span> b.isClosed {
     b.mu.<span class="fn">Unlock</span>()
     ch := <span class="fn">make</span>(<span class="kw">chan</span> T)
-    <span class="fn">close</span>(ch)                        <span class="com">// immediately-closed channel</span>
+    <span class="fn">close</span>(ch)
     <span class="kw">var</span> noop sync.<span class="typ">Once</span>
-    <span class="kw">return</span> ch, <span class="kw">func</span>() { noop.<span class="fn">Do</span>(<span class="kw">func</span>() {}) }  <span class="com">// harmless no-op unsub</span>
+    <span class="kw">return</span> ch, <span class="kw">func</span>() { noop.<span class="fn">Do</span>(<span class="kw">func</span>() {}) }
 }</code></pre>
   <p>Every lifecycle corner gets an explicit answer rather than a shrug. Subscribing to a closed
      broker returns an already-closed channel plus a no-op unsubscribe — the caller's code runs
@@ -541,7 +577,10 @@ unsubscribe := <span class="kw">func</span>() {
         b.mu.<span class="fn">Unlock</span>()
 
         sub.mu.<span class="fn">Lock</span>()
-        <span class="kw">if</span> !sub.closed { sub.closed = <span class="kw">true</span>; <span class="fn">close</span>(sub.ch) }
+        <span class="kw">if</span> !sub.closed {
+            sub.closed = <span class="kw">true</span>
+            <span class="fn">close</span>(sub.ch)
+        }
         sub.mu.<span class="fn">Unlock</span>()
     })
 }</code></pre>
@@ -574,8 +613,8 @@ unsubscribe := <span class="kw">func</span>() {
 }</code></pre>
   <p>You cannot enumerate the interleavings that might break a concurrent type — so instead,
      generate thousands of them. The hammer runs eight goroutines for 200ms, each cycling
-     deterministically through all five operations (Subscribe+drain+Unsub, Publish, peek-then-
-     Unsub, bounded PublishBlocking, periodic Close) driven by <code>(g+i)%5</code>. Determinism
+     deterministically through all five operations (Subscribe→sleep→Unsub→drain, Publish,
+     peek-then-Unsub, bounded PublishBlocking, periodic Close) driven by <code>(g+i)%5</code>. Determinism
      matters: pseudo-random scheduling seeds make failures unreproducible, whereas a fixed cycle
      failing under <code>-race</code> tends to fail again. The watchdog pattern is the second
      essential ingredient — a deadlock doesn't fail a test, it hangs the suite forever, so every
