@@ -18,8 +18,10 @@ import (
 // ErrCodeTaken is returned by SaveCode when the code already exists.
 var ErrCodeTaken = errors.New("shorty: code already taken")
 
-// ErrNotFound is returned when Resolve cannot find the code. It wraps
-// sql.ErrNoRows so callers can use errors.Is.
+// ErrNotFound is returned when Resolve cannot find the code. Resolve
+// converts sql.ErrNoRows into it (a new chain, not a wrap), so
+// errors.Is(err, sql.ErrNoRows) will NOT match — callers check
+// errors.Is(err, ErrNotFound).
 var ErrNotFound = errors.New("shorty: not found")
 
 // Store is the SQLite-backed URL store.

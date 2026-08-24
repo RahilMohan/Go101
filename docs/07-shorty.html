@@ -340,7 +340,7 @@
     <li><strong>R1 — Round trip works end to end.</strong> POSTing
         <code>{"url": "https://example.com/path?q=1"}</code> to <code>/api/shorten</code> returns
         <code>201</code> with a 6-character <code>code</code> and a <code>short_url</code> of
-        base + "/" + code; GETting <code>/<code>code</code></code> returns
+        base + "/" + code; GETting a stored code path returns
         <code>302 Found</code> with the original target in <code>Location</code>; the store then
         reports <code>Count() == 1</code>.</li>
     <li><strong>R2 — Duplicate explicit codes conflict safely.</strong> A second
@@ -485,9 +485,12 @@ mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /{code}"</span>, s
 target, err := sv.store.<span class="fn">Resolve</span>(r.<span class="fn">PathValue</span>(<span class="str">"code"</span>))</code></pre>
   <p>Before Go 1.22, the default mux matched only literal prefixes; anything dynamic required a
      third-party router. The new grammar puts three powers into the standard library. A
-     <strong>method prefix</strong> (<code>"POST /api/shorten"</code>) rejects wrong-method
-     requests with <code>405 Method Not Allowed</code> automatically — no manual method checking
-     inside handlers. A <strong>wildcard segment</strong> (<code>/{code}</code>) captures exactly
+     <strong>method prefix</strong> (<code>"POST /api/shorten"</code>) scopes a pattern to one
+     method, so handlers never need manual method checking. The automatic
+     <code>405 Method Not Allowed</code> (with an <code>Allow</code> header) only fires when no
+     other pattern matches the path — shorty's own catch-all <code>"/"</code> route swallows every
+     wrong-method request into a JSON 404 first; delete that catch-all and ServeMux hands you
+     405 + <code>Allow</code> for free. A <strong>wildcard segment</strong> (<code>/{code}</code>) captures exactly
      one path segment, retrievable with <code>r.PathValue("code")</code>. And specificity rules
      resolve conflicts deterministically: literal beats wildcard, longer beats shorter, so
      <code>GET /api/stats</code> always routes to stats, never into the redirect handler as a
@@ -526,9 +529,15 @@ db.<span class="fn">Exec</span>(<span class="str">`INSERT INTO urls (code, url) 
 
 <span class="com">// broken — the value is parsed as SQL:</span>
 db.<span class="fn">Exec</span>(<span class="str">"INSERT INTO urls VALUES ('" </span>+ code + <span class="str">"', '" </span>+ url + <span class="str">"')"</span>)</code></pre>
-  <p>Run the broken version with <code>code = "x'); DROP TABLE urls;--"</code> and the database
-     dutifully executes two statements: your insert and an attacker's table deletion. With
-     placeholders, the driver sends the statement text and the values down separate channels;
+  <p>Run the broken version with <code>code = "x','y'); DROP TABLE urls;--"</code> and the
+     database dutifully executes two statements: your insert with attacker-chosen values
+     <code>'x'</code>, <code>'y'</code>, and the attacker's table deletion. The payload shape is
+     deliberate: the textbook one-liner <code>x'); DROP TABLE urls;--</code> fails harmlessly on
+     this schema — it closes the value list after a single column while <code>urls</code> has two,
+     so SQLite rejects statement one ("2 columns but 1 values were supplied") before the
+     <code>DROP</code> can run. That near miss is luck, not defense; shape the payload to the
+     column count and injection lands. With placeholders, the driver sends the statement text and
+     the values down separate channels;
      the SQL parser never sees user bytes as code, so injection is structurally impossible —
      not merely filtered. The same mechanism is also a performance feature: the prepared
      statement shape can be reused instead of re-parsed per row. In shorty every query uses

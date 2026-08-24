@@ -29,8 +29,10 @@ import (
 // ErrCodeTaken is returned by SaveCode when the code already exists.
 var ErrCodeTaken = errors.New("shorty: code already taken")
 
-// ErrNotFound is returned when Resolve cannot find the code. It wraps
-// sql.ErrNoRows so callers can use errors.Is.
+// ErrNotFound is returned when Resolve cannot find the code. Resolve
+// converts sql.ErrNoRows into it (a new chain, not a wrap), so
+// errors.Is(err, sql.ErrNoRows) will NOT match — callers check
+// errors.Is(err, ErrNotFound).
 var ErrNotFound = errors.New("shorty: not found")
 
 const (
@@ -228,7 +230,8 @@ func RequestLogger(w io.Writer) func(http.Handler) http.Handler {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: rw, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
-			fmt.Fprintf(w, "%s %s %d %v\n", r.Method, r.URL.Path, rec.status, time.Since(start))
+			path := strings.ReplaceAll(r.URL.Path, "\n", "%0A") // block log-line forgery
+			fmt.Fprintf(w, "%s %s %d %v\n", r.Method, path, rec.status, time.Since(start))
 		})
 	}
 }
