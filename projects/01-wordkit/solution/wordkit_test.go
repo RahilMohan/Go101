@@ -87,14 +87,44 @@ func TestAnalyzePropagatesReaderError(t *testing.T) {
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("Analyze() error = %v, want %v", err, sentinel)
 	}
-	if stats.Bytes != 0 {
-		t.Errorf("Bytes read despite error = %d, want 0", stats.Bytes)
+	if stats != (Stats{}) {
+		t.Errorf("Analyze() stats = %+v on error, want zeroed Stats", stats)
+	}
+}
+
+// midReadReader yields some data first, then fails — pinning that Analyze
+// zeroes partial stats even after bytes were successfully consumed.
+type midReadReader struct {
+	data []byte
+	err  error
+}
+
+func (r *midReadReader) Read(p []byte) (int, error) {
+	if len(r.data) > 0 {
+		n := copy(p, r.data)
+		r.data = r.data[n:]
+		return n, nil
+	}
+	return 0, r.err
+}
+
+func TestAnalyzeMidReadErrorZeroesPartialStats(t *testing.T) {
+	sentinel := errors.New("mid-read failure")
+	stats, err := Analyze(&midReadReader{
+		data: []byte("partial data\nand more"),
+		err:  sentinel,
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("Analyze() error = %v, want %v", err, sentinel)
+	}
+	if stats != (Stats{}) {
+		t.Errorf("Analyze() stats = %+v on mid-read error, want zeroed Stats", stats)
 	}
 }
 
 func TestFormat(t *testing.T) {
 	got := Format(Stats{Lines: 12, Words: 3456, Bytes: 789012, Chars: 34})
-	want := fmt.Sprintf("%8d%8d%8d%8d", 12, 3456, 789012, 34)
+	want := "      12    3456  789012      34"
 	if got != want {
 		t.Errorf("Format() = %q, want %q", got, want)
 	}

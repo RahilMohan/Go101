@@ -17,6 +17,7 @@ type Stats struct {
 
 // Analyze reads r fully and returns Stats. It streams the input through a
 // fixed-size buffer, so memory use is constant regardless of input size.
+// On a read error it returns zeroed Stats together with the wrapped error.
 func Analyze(r io.Reader) (Stats, error) {
 	var s Stats
 	var (
@@ -31,7 +32,7 @@ func Analyze(r io.Reader) (Stats, error) {
 			if err == io.EOF {
 				break
 			}
-			return s, fmt.Errorf("wordkit: read: %w", err)
+			return Stats{}, fmt.Errorf("wordkit: read: %w", err)
 		}
 		s.Bytes += int64(size)
 		s.Chars++ // invalid bytes decode as utf8.RuneError with size 1: still one char each

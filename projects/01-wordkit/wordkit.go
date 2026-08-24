@@ -15,7 +15,7 @@ type Stats struct {
 
 // Analyze reads r fully and returns Stats.
 // Reading must be streaming (bufio or io.Copy buffer), never load-all via
-// io.ReadAll.
+// io.ReadAll. On a read error it returns zeroed Stats together with the error.
 func Analyze(r io.Reader) (Stats, error) {
 	// TODO: Implement
 	return Stats{}, nil

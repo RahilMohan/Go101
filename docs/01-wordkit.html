@@ -294,8 +294,14 @@
     <li><strong>R1 — Count four statistics</strong> over an <code>io.Reader</code>: lines
         (<code>\n</code> characters), words (whitespace-separated fields per <code>unicode.IsSpace</code>),
         bytes, and UTF-8 characters.</li>
-    <li><strong>R2 — Final unterminated line counts.</strong> Input <code>"last"</code> with no
-        trailing newline yields <code>Lines: 4</code> in the multi-line case — wc-compatible behavior.</li>
+    <li><strong>R2 — Final unterminated line counts.</strong> A final non-empty line without a
+        trailing newline still counts as a line: input <code>"last"</code> yields
+        <code>Lines: 1</code>, and the multi-line fixture
+        <code>"one two\tthree\nfour  five\n\nlast"</code> yields <code>Lines: 4</code>.
+        This is deliberately <em>wc-like but not identical</em>: unlike <code>wc -l</code>
+        (which counts only <code>\n</code> bytes), any content — including trailing whitespace —
+        after the last newline adds one line. Compare outputs against real <code>wc -l</code>
+        with that difference in mind.</li>
     <li><strong>R3 — Unicode-aware character count.</strong> <code>"héllo wörld ✓\n"</code> is
         18 bytes but 14 chars: multi-byte runes count once each.</li>
     <li><strong>R4 — Invalid UTF-8 degrades gracefully.</strong> Each invalid byte counts as one
@@ -311,9 +317,9 @@
   <ul>
     <li><strong>NF1 — Constant memory.</strong> The 10,000-line large-input test proves streaming:
       memory must not scale with input size.</li>
-    <li><strong>NF2 — Errors propagate unwrapped-or-wrapped-but-checkable.</strong> A failing reader
-      must surface via <code>errors.Is</code>, and partial stats from a failed read must be zeroed
-      at the point of return.</li>
+    <li><strong>NF2 — Errors propagate checkably, stats zeroed.</strong> A failing reader
+      must surface via <code>errors.Is</code>, and <code>Analyze</code> must return zeroed stats
+      together with the error — never partial counts from before the failure.</li>
     <li><strong>NF3 — CLI behavior:</strong> no args reads stdin; one or more file paths are each
       analyzed; <code>-l/-w/-c/-m</code> select columns; no flags prints all four; a missing file
       prints to stderr and exits non-zero while other files still process.</li>
@@ -351,18 +357,20 @@
   <pre><code>c, size, err := br.<span class="fn">ReadRune</span>()
 <span class="kw">if</span> err != <span class="kw">nil</span> {
     <span class="kw">if</span> err == io.EOF { <span class="kw">break</span> }
-    <span class="kw">return</span> s, fmt.<span class="fn">Errorf</span>(<span class="str">"wordkit: read: %w"</span>, err)
-}
-s.Bytes += <span class="typ">int64</span>(size)
-s.Chars++ <span class="com">// invalid bytes decode as utf8.RuneError with size 1</span></code></pre>
+    <span class="kw">return</span> Stats{}, fmt.<span class="fn">Errorf</span>(<span class="str">"wordkit: read: %w"</span>, err)
+}</code></pre>
   <p>This is why invalid UTF-8 "just works": Go's decoder substitutes <code>utf8.RuneError</code>
      (U+FFFD) with size 1 per bad byte, so each corrupt byte still advances both counters by one —
-     requirement R4 falls out of the strategy rather than being special-cased.</p>
+     requirement R4 falls out of the strategy rather than being special-cased. On a real read
+     error, the accumulated partial stats are discarded: <code>Analyze</code> returns zeroed
+     stats alongside the wrapped error, so callers can't mistake a truncated read for a complete one.</p>
 
-  <h3>D4: Two-state line tracking</h3>
-  <p><code>pendingLine</code> records whether any non-newline content appeared since the last
-     <code>'\n'</code>. At EOF, if it's set, one final line is added. This reproduces
-     <code>wc</code>'s semantics (R2) with a single boolean instead of buffering the last line.</p>
+   <h3>D4: Two-state line tracking</h3>
+   <p><code>pendingLine</code> records whether any non-newline content appeared since the last
+      <code>'\n'</code>. At EOF, if it's set, one final line is added (R2). Note this deviates from
+      strict <code>wc -l</code> semantics, which count only newline bytes: an unterminated final
+      line — even one made solely of trailing spaces — still counts here. The single boolean
+      replaces buffering the last line.</p>
 
   <h3>D5: Library + cmd split</h3>
   <pre><code>projects/01-wordkit/
