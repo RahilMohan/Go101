@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 — Learn Go in 16 Projects</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 4rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 3.5rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header p {
+    margin-top: 0.5rem;
+    font-size: 1.25rem;
+    color: var(--muted);
+  }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1rem 2rem 4rem;
+  }
+  section { margin-top: 3rem; }
+  h2 {
+    display: inline-block;
+    font-size: 1.4rem;
+    padding: 0.25rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    margin-bottom: 1.25rem;
+  }
+  .tier-beginner h2 { color: var(--green); border-color: rgba(63,185,80,0.4); }
+  .tier-intermediate h2 { color: var(--yellow); border-color: rgba(210,153,34,0.4); }
+  .tier-advanced h2 { color: var(--purple); border-color: rgba(188,140,255,0.4); }
+  .tier-expert h2 { color: var(--red); border-color: rgba(248,81,73,0.4); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+  a.card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    transition: transform 150ms ease, border-color 150ms ease, box-shadow 200ms ease;
+  }
+  @keyframes card-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(88,166,255,0.35);
+      border-color: rgba(88,166,255,0.55);
+    }
+    50% {
+      box-shadow: 0 0 14px 2px rgba(88,166,255,0.45);
+      border-color: rgba(88,166,255,0.85);
+    }
+  }
+  a.card:hover {
+    animation: card-pulse 1.6s ease-in-out infinite;
+    transform: translateY(-2px);
+  }
+  a.card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .card .num {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .card .name {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0.15rem 0 0.35rem;
+  }
+  .card .lesson {
+    font-size: 0.92rem;
+    color: var(--muted);
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 2rem 1rem;
+    border-top: 1px solid var(--border);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    a.card:hover {
+      animation: none;
+      transform: none;
+      box-shadow: none;
+      border-color: var(--accent);
+    }
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Go101</h1>
+  <p>Learn Go from beginner to expert in 16 projects</p>
+</header>
+<main>
+
+<section class="tier tier-beginner">
+  <h2>Beginner · Projects 1–4</h2>
+  <div class="grid">
+    <a class="card" href="01-wordkit.html">
+      <span class="num">Project 01</span>
+      <div class="name">wordkit</div>
+      <div class="lesson">CLI text analyzer: io.Reader/io.Writer abstraction, error values</div>
+    </a>
+    <a class="card" href="02-taskline.html">
+      <span class="num">Project 02</span>
+      <div class="name">taskline</div>
+      <div class="lesson">TODO manager: structs, JSON tags, zero-dependency philosophy</div>
+    </a>
+    <a class="card" href="03-loglens.html">
+      <span class="num">Project 03</span>
+      <div class="name">loglens</div>
+      <div class="lesson">Streaming log analyzer: bufio scanning, error wrapping (%w)</div>
+    </a>
+    <a class="card" href="04-moneylib.html">
+      <span class="num">Project 04</span>
+      <div class="name">moneylib</div>
+      <div class="lesson">Money library: table-driven tests, fuzzing, API design</div>
+    </a>
+  </div>
+</section>
+
+<section class="tier tier-intermediate">
+  <h2>Intermediate · Projects 5–9</h2>
+  <div class="grid">
+    <a class="card" href="05-gopherfetch.html">
+      <span class="num">Project 05</span>
+      <div class="name">gopherfetch</div>
+      <div class="lesson">Concurrent link checker: goroutines, worker pools, context</div>
+    </a>
+    <a class="card" href="06-chatwire.html">
+      <span class="num">Project 06</span>
+      <div class="name">chatwire</div>
+      <div class="lesson">TCP chat server: raw sockets, fan-out channels, graceful shutdown</div>
+    </a>
+    <a class="card" href="07-shorty.html">
+      <span class="num">Project 07</span>
+      <div class="name">shorty</div>
+      <div class="lesson">URL shortener API: net/http routing, middleware, database/sql</div>
+    </a>
+    <a class="card" href="08-pubsubx.html">
+      <span class="num">Project 08</span>
+      <div class="name">pubsubx</div>
+      <div class="lesson">Pub/sub library: generics, backpressure, subscriber isolation</div>
+    </a>
+    <a class="card" href="09-metricsd.html">
+      <span class="num">Project 09</span>
+      <div class="name">metricsd</div>
+      <div class="lesson">Metrics scraper: atomics, lock-free counters</div>
+    </a>
+  </div>
+</section>
+
+<section class="tier tier-advanced">
+  <h2>Advanced · Projects 10–12</h2>
+  <div class="grid">
+    <a class="card" href="10-minikv.html">
+      <span class="num">Project 10</span>
+      <div class="name">minikv</div>
+      <div class="lesson">Redis-like KV store: binary protocols, WAL, TTL sweeps</div>
+    </a>
+    <a class="card" href="11-tagforge.html">
+      <span class="num">Project 11</span>
+      <div class="name">tagforge</div>
+      <div class="lesson">Config validator: reflection, struct tags, when NOT to reflect</div>
+    </a>
+    <a class="card" href="12-pipeline.html">
+      <span class="num">Project 12</span>
+      <div class="name">pipeline</div>
+      <div class="lesson">DAG orchestrator: errgroup, cancellation propagation</div>
+    </a>
+  </div>
+</section>
+
+<section class="tier tier-expert">
+  <h2>Expert · Projects 13–16</h2>
+  <div class="grid">
+    <a class="card" href="13-perfhunt.html">
+      <span class="num">Project 13</span>
+      <div class="name">perfhunt</div>
+      <div class="lesson">Optimization target: pprof, GC tuning, benchmark methodology</div>
+    </a>
+    <a class="card" href="14-fastthumb.html">
+      <span class="num">Project 14</span>
+      <div class="name">fastthumb</div>
+      <div class="lesson">cgo thumbnailer: cgo overhead, unsafe, build tags</div>
+    </a>
+    <a class="card" href="15-raftling.html">
+      <span class="num">Project 15</span>
+      <div class="name">raftling</div>
+      <div class="lesson">Raft cluster: leader election, log replication, module publishing</div>
+    </a>
+    <a class="card" href="16-gopherpilot.html">
+      <span class="num">Project 16</span>
+      <div class="name">gopherpilot</div>
+      <div class="lesson">TUI coding agent capstone: SSE streaming, tool-execution loop, state machines</div>
+    </a>
+  </div>
+</section>
+
+</main>
+<footer>Go101 — 16 projects, zero external dependencies. Rendered entirely offline.</footer>
+</body>
+</html>
