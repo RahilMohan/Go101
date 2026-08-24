@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 08 — pubsubx</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>pubsubx</h1>
+  <p class="subtitle">Go101 · Project 08 — a generic publish/subscribe broker</p>
+  <div class="badge-row">
+    <span class="badge tier">Intermediate Tier</span>
+    <span class="badge">generics [T any]</span>
+    <span class="badge">channels</span>
+    <span class="badge">sync.RWMutex</span>
+    <span class="badge">sync.Once</span>
+    <span class="badge">context</span>
+    <span class="badge">Backpressure policies</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: generics + sync + channels, nothing else</h3>
+  <p>pubsubx needs three things from the standard library — type parameters
+     (<code>[T any]</code>), the <code>sync</code> package (<code>Mutex</code>,
+     <code>RWMutex</code>, <code>Once</code>, <code>WaitGroup</code>), and buffered channels —
+     plus <code>context</code> for bounded blocking. No message-broker library, no event bus,
+     no <code>go.sum</code>. Where project 05 proved concurrency primitives don't need a library,
+     project 08 raises the stakes again: this time the API surface itself is generic, so every
+     type flowing through the system is one you chose at compile time.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in pubsubx</th><th>What it teaches</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>type parameters</code></td><td><code>Broker[T any]</code>, <code>subscriber[T]</code>, channels typed as <code>&lt;-chan T</code>; instantiated with <code>int</code>, <code>string</code>, structs, even <code>any</code></td><td>Generics beyond containers — real values of your type T flowing through channel types, with zero runtime casts or assertions</td></tr>
+      <tr><td><code>channels</code></td><td>Each subscriber <em>is</em> a buffered channel; capacity is chosen per subscriber at Subscribe time</td><td>The buffer isn't an implementation detail — it's the backpressure contract between publisher and consumer</td></tr>
+      <tr><td><code>sync</code></td><td><code>RWMutex</code> two-level locking (broker → subscriber), <code>Once</code>-wrapped unsubscribe, <code>WaitGroup</code> for parallel blocking sends</td><td>Lock ordering as a discipline, read-mode locks held across sends to make send-on-closed impossible, idempotency via <code>sync.Once</code></td></tr>
+      <tr><td><code>context</code></td><td><code>PublishBlocking(ctx, msg)</code> gives up when ctx fires rather than blocking forever</td><td>Bounded waiting: a producer that can block must always carry an exit hatch</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>An <code>interface{}</code>-based broker</strong> — the pre-generics way:
+        <code>Publish(msg interface{})</code> into <code>chan interface{}</code>, with every
+        consumer type-asserting on receive. It works, but it moves type errors from compile time
+        to run time. With generics, <code>b.Publish("oops")</code> against a
+        <code>Broker[int]</code> simply doesn't compile; with <code>interface{}</code>, the same
+        mistake surfaces as a failed assertion in some handler, in production. The generic
+        version prevents entire bug classes — that's the point worth seeing concretely.</li>
+    <li><strong>NATS / MQTT client libraries</strong> — production-grade brokers would turn this
+        into configuration: subjects, QoS levels, reconnect policies. The lesson becomes "read
+        NATS docs" instead of "understand why evict-then-send is race-free only while one
+        publisher holds the lock." Real broker libraries are excellent precisely because their
+        internals solve the problems you learn to reason about here.</li>
+    <li><strong>A single owner goroutine owning all broker state</strong> — genuinely considered
+        and rejected, with the rationale written into the package comment. Publish would need a
+        reply channel per call just to report its delivered count, and PublishBlocking would need
+        careful multiplexing of many waiters onto one goroutine — more moving parts than the
+        mutex scheme, with no added safety. Knowing <em>when not</em> to use "share memory by
+        communicating" is half the lesson.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Real type parameters flowing through channel types.</strong> Not a generic stack
+        or map from a tutorial — here <code>T</code> travels through
+        <code>map[int64]*subscriber[T]</code>, into <code>chan T</code>, out as
+        <code>&lt;-chan T</code> handed to the caller. You watch inference work end-to-end and
+        feel what <code>[T any]</code> buys over <code>interface{}</code>: the delivered count,
+        the buffer, the close semantics are all identical for every instantiation.</li>
+    <li><strong>Backpressure as an API surface.</strong> Most libraries hide what happens when a
+        consumer falls behind. pubsubx makes it an explicit enum — <code>DropNew</code>,
+        <code>DropOld</code>, <code>Block</code> — captured per subscriber at Subscribe time.
+        Choosing a policy becomes part of the contract you design, not an accident you debug.</li>
+    <li><strong>Slow-consumer isolation as a testable invariant.</strong> A stalled reader on a
+        capacity-1 buffer cannot delay other subscribers or block the publisher. That property
+        is asserted directly by the tests, turning "the broker shouldn't jam" from folklore into
+        a regression-tested guarantee.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>pubsubx_test.go</code> — the executable specification. If your
+     implementation passes these tests (including under <code>-race</code>), it satisfies the
+     requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Fan-out is complete and FIFO per subscriber.</strong> Publishing 50 messages
+        to 3 subscribers reports <code>delivered == 3</code> each time, and every subscriber
+        receives exactly messages 0..49 in order, with nothing extra afterward.</li>
+    <li><strong>R2 — A slow subscriber can't hurt anyone.</strong> With one fast sub
+        (capacity 300) and one never-read sub (capacity 1), all 200 publishes complete without
+        blocking; the fast sub still receives every message in order; the slow sub admitted
+        exactly its first message and dropped the rest.</li>
+    <li><strong>R3 — DropOld keeps the freshest messages.</strong> Five publishes into a
+        capacity-3 subscriber leaves exactly messages 3, 4, 5 readable, in order — oldest
+        evicted, size pinned at capacity, delivery count stays 1 throughout.</li>
+    <li><strong>R4 — PublishBlocking honors cancellation.</strong> With a full Block subscriber
+        and a 100ms context, the blocked publish returns
+        <code>context.DeadlineExceeded</code> promptly (a watchdog bounds it at 3s), the overflow
+        was never admitted, and the original buffered value survives untouched.</li>
+    <li><strong>R5 — PublishBlocking admits when space frees.</strong> Once a consumer drains
+        one slot, the pending message is admitted and arrives after the already-buffered value
+        (FIFO), well within a generous elapsed-time backstop.</li>
+    <li><strong>R6 — Only Block-policy subscribers gate PublishBlocking.</strong> A full DropNew
+        subscriber doesn't stall completion; the Block subscriber admits behind its buffered
+        value; the DropNew sub drops overflow silently. Both outcomes verified explicitly.</li>
+    <li><strong>R7 — Close semantics are clean.</strong> After Close: Publish returns 0, already
+        buffered values remain readable before the channel reports closed, double-Close is a
+        safe no-op, and Unsubscribe after Close (twice!) panics nowhere.</li>
+    <li><strong>R8 — Unsubscribe is idempotent and race-free.</strong> Eight goroutines each
+        calling <code>unsub()</code> twice concurrently produce no panic; subsequent publishes
+        deliver 0; the buffered value drains then the channel reports closed.</li>
+    <li><strong>R9 — Capacity clamps to minimum 1.</strong> Subscribing with capacity 0 yields
+        a working subscriber that admits one message.</li>
+    <li><strong>R10 — Generics instantiate with any type.</strong> The same broker code serves
+        <code>Broker[point]</code> (concrete struct) and <code>Broker[any]</code> (heterogeneous
+        payloads including nil), with identical fan-out semantics.</li>
+    <li><strong>R11 — Hammer survival.</strong> Eight goroutines mixing Subscribe, Publish,
+        PublishBlocking, repeated Close, and Unsubscribe for 200ms complete without panic or
+        deadlock, guarded by a 30-second watchdog.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Send-on-closed is structurally impossible.</strong> Not "we were lucky" —
+        the locking protocol makes close-during-send unrepresentable under any interleaving.</li>
+    <li><strong>NF2 — Publishers never block.</strong> Plain <code>Publish</code> uses only
+        non-blocking selects; even Block-policy subscribers degrade to DropNew for it.</li>
+    <li><strong>NF3 — Flake-free under <code>-race</code>.</strong> Timing assertions are
+        watchdogs with huge margins; primary assertions count events (delivered counts, buffer
+        contents, closed flags).</li>
+    <li><strong>NF4 — Bounded blocking.</strong> Any path that waits (PublishBlocking) is bound
+        by the caller's context; Close may wait only for sends that are themselves already
+        context-bounded.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Two-level locking over an owner goroutine</h3>
+  <pre><code><span class="com">// Broker.mu serializes broker-level state. Because Publish holds it</span>
+<span class="com">// for the whole fan-out, only one publisher mutates a channel</span>
+<span class="com">// buffer at a time — which is exactly what makes DropOld's</span>
+<span class="com">// "evict one, then send" sequence race-free.</span>
+b.mu.<span class="fn">Lock</span>()
+<span class="kw">defer</span> b.mu.<span class="fn">Unlock</span>()
+<span class="kw">for</span> _, sub := <span class="kw">range</span> b.subs {
+    <span class="kw">if</span> sub.<span class="fn">deliver</span>(msg) { delivered++ }
+}</code></pre>
+  <p>Two designs were weighed, and the loser is documented in the package comment so you can
+     audit the reasoning. An owner goroutine owning all state is the idiomatic-sounding choice —
+     but <code>Publish</code> must return a delivered <em>count</em>, which means a reply channel
+     per call, and <code>PublishBlocking</code> means many concurrent waiters multiplexed onto
+     one goroutine: more machinery, more failure modes, zero added safety. The chosen scheme is
+     two-level instead. <strong>Broker.mu</strong> serializes subscriber-map access and whole
+     fan-outs; holding it across a Publish is what guarantees only one publisher ever touches a
+     given buffer mid-delivery — the fact DropOld correctness rests on.
+     <strong>subscriber.mu</strong> guards each channel's closed flag, and its job is subtler:
+     making a specific panic impossible.</p>
+
+  <h3>D2: Read-mode locks held across sends — why send-on-closed can't happen</h3>
+  <pre><code><span class="kw">func</span> (s *<span class="typ">subscriber</span>[T]) <span class="fn">deliver</span>(msg T) <span class="typ">bool</span> {
+    s.mu.<span class="fn">RLock</span>()
+    <span class="kw">defer</span> s.mu.<span class="fn">RUnlock</span>()
+    <span class="kw">if</span> s.closed { <span class="kw">return</span> <span class="kw">false</span> }  <span class="com">// lost the race with Unsubscribe/Close</span>
+    <span class="fn">select</span> {
+    <span class="kw">case</span> s.ch &lt;- msg: <span class="kw">return</span> <span class="kw">true</span>
+    <span class="kw">default</span>:
+    }
+    ...
+}</code></pre>
+  <p>Go's most feared concurrency panic is <code>send on closed channel</code>, because the
+     usual defenses (a boolean flag checked before sending) don't work: the check and the send
+     are two operations, and a close can slip between them no matter how carefully you order
+     them. The fix here is structural. Every sender takes the subscriber's RWMutex in
+     <em>read mode</em> for the entire send — including any blocking wait inside
+     <code>blockingDeliver</code>. Closing a channel requires the <em>write</em> mode lock. Since
+     readers and writers exclude each other, a close physically cannot execute while a sender is
+     mid-send, under any interleaving whatsoever. The unsubscribe path shows the discipline:
+     remove from the broker map first (under <code>b.mu</code>) so no future Publish sees the
+     subscriber, then take <code>sub.mu</code> write-mode to flip the flag and close. Double-close
+     is likewise impossible: the <code>closed</code> flag lives inside the same critical section
+     as the <code>close(ch)</code> call, so exactly one closer ever wins.</p>
+
+  <h3>D3: Backpressure as a Policy enum, captured at Subscribe time</h3>
+  <pre><code><span class="kw">const</span> (
+    DropNew <span class="typ">Policy</span> = <span class="fn">iota</span>  <span class="com">// full? drop the incoming message (default)</span>
+    DropOld                 <span class="com">// full? evict oldest to admit newest</span>
+    Block                   <span class="com">// caller waits via PublishBlocking until admitted or ctx done</span>
+)
+
+sub := &amp;<span class="typ">subscriber</span>[T]{
+    ch:     <span class="fn">make</span>(<span class="kw">chan</span> T, capacity),
+    policy: b.policy,   <span class="com">// captured now; later SetDefaultPolicy won't affect me</span>
+}</code></pre>
+  <p>Each subscriber snapshots the broker's current default policy when it subscribes. This is a
+     deliberate coupling decision: a consumer's tolerance for loss shouldn't change out from
+     under it because someone reconfigured the broker later. The three policies have sharply
+     different shapes. <strong>DropNew</strong> is a pure non-blocking select — the simplest
+     possible thing, and the default. <strong>DropOld</strong> does something clever only
+     because D1's invariant holds: evict one element, then send, knowing no other publisher can
+     interleave (Broker.mu is held) and consumers only ever remove elements — so after eviction
+     there is guaranteed room. <strong>Block</strong> changes who feels the pain: the
+     <em>publisher</em> waits, which is why plain <code>Publish</code> deliberately treats Block
+     subscribers like DropNew (it promised never to block) and only
+     <code>PublishBlocking</code> honors them.</p>
+
+  <h3>D4: The PublishBlocking admission protocol</h3>
+  <pre><code>b.mu.<span class="fn">Lock</span>()
+<span class="kw">defer</span> ...  <span class="com">// partition subs under the lock:</span>
+<span class="kw">for</span> _, sub := <span class="kw">range</span> b.subs {
+    <span class="kw">if</span> sub.policy == <span class="typ">Block</span> &amp;&amp; !sub.closed {
+        blocking = <span class="fn">append</span>(blocking, sub)  <span class="com">// these gate completion</span>
+        <span class="kw">continue</span>
+    }
+    sub.<span class="fn">deliver</span>(msg)                     <span class="com">// ordinary drop semantics</span>
+}
+b.mu.<span class="fn">Unlock</span>()
+
+<span class="com">// then, outside the lock: one goroutine per Block sub,</span>
+<span class="com">// each polling admission every 250µs until admitted / removed / ctx done</span>
+wg.<span class="fn">Wait</span>()</code></pre>
+  <p>Blocking delivery has to answer a hard question: the broker cannot observe consumers
+     receiving from their channels — callers own those channels directly — so "wait for room"
+     has no natural wakeup signal. The solution polls: retry admission every 250µs, exiting when
+     admitted, when the subscriber disappears (a vanished subscriber counts as
+     <em>admitted</em> — there's nobody left to wait for), or when ctx fires. Three contract
+     details matter. First, non-Block subscribers are dispatched under the initial lock grab and
+     never gate completion — R6 pins this. Second, the per-subscriber goroutines run
+     <em>outside</em> Broker.mu, so one stalled Block subscriber can't freeze the whole broker.
+     Third, the edge case the review flagged: if the broker closes while a publisher is
+     mid-wait, the subscriber vanishes, <code>blockingDeliver</code> sees <code>closed ==
+     true</code>, and returns admitted. Mid-wait close = admitted — the message goes where it
+     can, and the publisher isn't stranded. And yes: <code>Block</code> +
+     <code>context.Background()</code> blocks until Close/Unsubscribe. That is the contract,
+     not a bug — the API makes the escape hatches explicit.</p>
+
+  <h3>D5: Subscribe-after-Close and other spec gap-fills</h3>
+  <pre><code><span class="kw">if</span> b.isClosed {
+    b.mu.<span class="fn">Unlock</span>()
+    ch := <span class="fn">make</span>(<span class="kw">chan</span> T)
+    <span class="fn">close</span>(ch)                        <span class="com">// immediately-closed channel</span>
+    <span class="kw">var</span> noop sync.<span class="typ">Once</span>
+    <span class="kw">return</span> ch, <span class="kw">func</span>() { noop.<span class="fn">Do</span>(<span class="kw">func</span>() {}) }  <span class="com">// harmless no-op unsub</span>
+}</code></pre>
+  <p>Every lifecycle corner gets an explicit answer rather than a shrug. Subscribing to a closed
+     broker returns an already-closed channel plus a no-op unsubscribe — the caller's code runs
+     unchanged, receives nothing, and cleans up harmlessly. Capacity below 1 clamps to 1, since a
+     zero-capacity channel would change Block/drop semantics entirely. Unknown policy values fall
+     back to DropNew rather than misbehaving silently. These aren't gold-plating: they're the
+     difference between a type whose edge behavior you must memorize and one whose edges are all
+     load-bearing and documented.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Generics beyond containers — typed channels as return values</h3>
+  <pre><code><span class="kw">func</span> (b *<span class="typ">Broker</span>[T]) <span class="fn">Subscribe</span>(capacity <span class="typ">int</span>) (&lt;-<span class="kw">chan</span> T, <span class="kw">func</span>()) {
+    ...
+    sub := &amp;<span class="typ">subscriber</span>[T]{ ch: <span class="fn">make</span>(<span class="kw">chan</span> T, capacity), ... }
+    <span class="kw">return</span> sub.ch, unsubscribe
+}</code></pre>
+  <p>Most generic Go code you've seen wraps slices or maps. Here the type parameter flows into
+     the public API itself: the caller receives a <code>&lt;-chan T</code> — receive-only,
+     correctly typed — and the compiler enforces that a <code>Broker[int]</code> can never emit
+     a string. Two details reward attention. The return type is the bidirectional
+     <code>chan T</code>'s receive-only projection, so callers can't close or inject into the
+     broker's channel — capability restriction via type direction, for free. And
+     <code>TestGenericInstantiationWithInterfaceType</code> shows <code>New[any]()</code> is
+     still available as an explicit opt-out: heterogeneous payloads work, but you had to
+     <em>choose</em> the erasure, per broker, at the type level — the exact inverse of
+     interface{}-everywhere.</p>
+
+  <h3>Buffered channel capacity as a backpressure contract</h3>
+  <div class="callout">
+    <p><strong>The rule:</strong> a channel's buffer size is a published agreement about how far
+       a consumer may fall behind before someone (drops the new message | drops the old message |
+       the producer waits). Choose it per consumer, and say which failure mode applies.</p>
+  </div>
+  <p>The tests treat capacity as observable behavior, not tuning. A capacity-1 subscriber that
+     is never read admits <em>exactly one</em> message — asserted down to the value. A
+     capacity-3 DropOld subscriber ends holding precisely the last three publishes. This is the
+     mindset shift: in most code a buffered channel's size is a magic number; here it's part of
+     the API signature (<code>Subscribe(capacity int)</code>) backed by proofs. The same
+     reasoning scales up to real infrastructure — Kafka partitions, NATS queue limits, gRPC
+     flow-control windows all encode "how far behind may you lag, and then what."</p>
+
+  <h3>sync.Once for idempotent unsubscribe</h3>
+  <pre><code><span class="kw">var</span> once sync.<span class="typ">Once</span>
+unsubscribe := <span class="kw">func</span>() {
+    once.<span class="fn">Do</span>(<span class="kw">func</span>() {
+        b.mu.<span class="fn">Lock</span>()
+        <span class="fn">delete</span>(b.subs, id)
+        b.mu.<span class="fn">Unlock</span>()
+
+        sub.mu.<span class="fn">Lock</span>()
+        <span class="kw">if</span> !sub.closed { sub.closed = <span class="kw">true</span>; <span class="fn">close</span>(sub.ch) }
+        sub.mu.<span class="fn">Unlock</span>()
+    })
+}</code></pre>
+  <p>Cleanup functions get called multiple times in real systems — defer stacks, error paths,
+     layered owners. <code>sync.Once</code> turns "call me at least once" into "exactly once,"
+     safely under concurrent invocation (eight goroutines × two calls each, per R8). Note the
+     belt-and-suspenders layering: Once handles duplicate <em>calls</em>, the
+     <code>!sub.closed</code> check handles the separate question of whether Close already got
+     there first — either guard alone leaves a hole. Also notice what the closure captures: not
+     the whole broker, just <code>id</code> and <code>sub</code>. Small closures capturing small
+     facts are easier to reason about than god-closures capturing everything.</p>
+
+  <h3>Lock ordering discipline — b.mu → sub.mu, never inverted</h3>
+  <p>Two mutexes in one program invite deadlock the moment someone acquires them in opposite
+     orders. This codebase has one rule, stated in comments and followed everywhere:
+     <code>b.mu</code> first, <code>sub.mu</code> second, never the reverse. Audit the paths:
+     Publish holds b.mu and acquires sub.mu (read) per subscriber; Unsubscribe briefly takes
+     b.mu, releases it, <em>then</em> takes sub.mu — note it releases the outer lock before the
+     inner, avoiding even nested hold time; Close takes b.mu, snapshots subscribers, releases,
+     then closes each under its own sub.mu. No path ever holds sub.mu while acquiring b.mu, so
+     the classic ABBA deadlock is unrepresentable. When you review concurrent code, trace the
+     acquisition order across every method — if you can't write the ordering rule in one
+     sentence, the code doesn't have one.</p>
+
+  <h3>Hammer testing methodology</h3>
+  <pre><code><span class="kw">select</span> {
+<span class="kw">case</span> &lt;-finished:
+<span class="kw">case</span> &lt;-time.<span class="fn">After</span>(<span class="num">30</span> * time.Second):
+    t.<span class="fn">Fatal</span>(<span class="str">"hammer test deadlocked"</span>)
+}</code></pre>
+  <p>You cannot enumerate the interleavings that might break a concurrent type — so instead,
+     generate thousands of them. The hammer runs eight goroutines for 200ms, each cycling
+     deterministically through all five operations (Subscribe+drain+Unsub, Publish, peek-then-
+     Unsub, bounded PublishBlocking, periodic Close) driven by <code>(g+i)%5</code>. Determinism
+     matters: pseudo-random scheduling seeds make failures unreproducible, whereas a fixed cycle
+     failing under <code>-race</code> tends to fail again. The watchdog pattern is the second
+     essential ingredient — a deadlock doesn't fail a test, it hangs the suite forever, so every
+     potentially-hanging test runs in a goroutine with a hard timeout that names the disease
+     ("deadlocked"). Run it as <code>go test -race ./projects/08-pubsubx/...</code> and the pair
+     — data-race detector plus deadlock watchdog — covers the two ways concurrent code dies.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>FIFO-per-subscriber as an executable property</h3>
+  <p><code>TestFanOutCompletenessPreservesOrder</code> asserts the strongest thing available:
+     3 subscribers × 50 ordered messages, checking each subscriber's stream position-by-position
+     against <code>m</code>, then asserting emptiness. Generic helpers make the checks
+     type-safe: <code>recvTimeout[T]</code> receives with a 2-second backstop (and fails loudly
+     on premature closure), while <code>assertEmpty[T]</code> treats "closed and empty" as empty
+     — the correct post-Close state. Because each subscriber has an independent buffer, order
+     could break independently per subscriber; the loop catches a scramble in any one of them.</p>
+
+  <h3>Isolation proven via a deliberately unread subscriber</h3>
+  <pre><code>slowCh, slowUnsub := b.<span class="fn">Subscribe</span>(<span class="num">1</span>)  <span class="com">// never read: stalls immediately</span>
+...
+slowDelivered := delivered - total
+<span class="kw">if</span> slowDelivered != <span class="num">1</span> {  <span class="com">// cap-1 unread buffer admits exactly the first message</span></code></pre>
+  <p>The isolation test creates the worst case on purpose: a capacity-1 subscriber that nobody
+     ever reads. Then it demands the full triangle at once — 200 non-blocking publishes total
+     (the fast path wasn't slowed), the fast sub received all 200 in order (isolation held), and
+     the slow sub received <em>exactly one</em> message (drop semantics are precise, not
+     approximate). Deriving the slow sub's count arithmetically from the returned delivered
+     totals is elegant: no instrumentation hooks needed, the API's own return values are the
+     measurement instruments.</p>
+
+  <h3>DropOld eviction, pinned exactly</h3>
+  <p><code>TestDropOldEvictsOldestKeepsNewest</code> feeds 1..5 into a capacity-3 subscriber and
+     asserts the residue is exactly <code>[3, 4, 5]</code> — oldest gone, newest kept, order
+     intact. Every weaker assertion would leave a bug-shaped hole: asserting only "three values"
+     misses wrong-victim eviction; asserting only "contains 5" misses duplicates; asserting only
+     "size ≤ 3" misses leaks. The delivered-count-stays-1 check along the way confirms eviction
+     doesn't disturb the accounting. This is the difference between testing that something
+     happened and testing that <em>the right thing</em> happened.</p>
+
+  <h3>Context cancellation with a deadlock watchdog</h3>
+  <pre><code><span class="kw">go func</span>() { done &lt;- b.<span class="fn">PublishBlocking</span>(ctx, <span class="str">"overflow"</span>) }()
+<span class="kw">select</span> {
+<span class="kw">case</span> err := &lt;-done:
+    <span class="kw">if</span> !errors.<span class="fn">Is</span>(err, context.<span class="typ">DeadlineExceeded</span>) { t.<span class="fn">Fatalf</span>(...) }
+<span class="kw">case</span> &lt;-time.<span class="fn">After</span>(<span class="num">3</span> * time.Second):
+    t.<span class="fn">Fatal</span>(<span class="str">"...did not return within bound after ctx cancellation (deadlock?)"</span>)
+}</code></pre>
+  <p>The blocking-publish tests follow a strict shape: run the risky call in a goroutine feeding
+     a buffered result channel, select between the result and a timeout vastly larger than the
+     expected duration (100ms deadline vs 3s watchdog). The primary assertion is the error's
+     identity via <code>errors.Is</code>; the timing arm exists purely so a broken
+     implementation fails with a diagnosis instead of hanging CI. Each test then verifies
+     collateral state: the blocked message was never admitted, the pre-filled value survived, or
+     — in the mixed-policy test — the Block sub admitted behind its buffered head while the
+     DropNew sub dropped cleanly. Cancellation correctness is never inferred from "it returned";
+     it's confirmed by what did and didn't enter the buffers.</p>
+
+  <h3>Lifecycle corners, enumerated</h3>
+  <p><code>TestCloseSemantics</code> walks the full post-Close script in one test: buffered
+     values drain before the channel reports closed (Go's close semantics preserved, not fought),
+     Publish returns 0, a second Close is silent, and unsubscribe-after-Close — called twice —
+     is harmless. <code>TestUnsubscribeIsIdempotentAndRaceFree</code> escalates the same corner
+     to concurrency: sixteen unsub calls from eight goroutines, then proof that the buffered
+     message still drains and the channel still closes exactly once.
+     <code>TestSubscribeCapacityClampedToMinimumOne</code> closes out the input-validation edge.
+     Together they ensure the type's unhappy paths aren't just non-crashing but
+     semantically defined — the property that makes a concurrency type usable by people who
+     didn't write it.</p>
+
+  <h3>The -race hammer protocol</h3>
+  <pre><code>go test -race ./projects/08-pubsubx/...</code></pre>
+  <p>The hammer test (R11) exists for the race detector, not standalone: 200ms of eight-way
+     interleaved Subscribe/Publish/PublishBlocking/Close generates enough scheduling variety
+     that <code>-race</code>'s happens-before tracking catches unsynchronized accesses a single
+     orderly test would never touch. Its own body models good citizenship — draining
+     possibly-closed channels with comma-ok receives, bounding every blocking publish with a
+     timeout context — because a hammer test that itself races proves nothing. Watchdog at 30
+     seconds converts potential deadlock from a hung suite into a named, attributable failure.
+     This is the acceptance ritual for any concurrent type: functional tests green, then the
+     hammer, then both together under the detector.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Pub/sub is everywhere in Go infrastructure</h3>
+    <p>The broker you just built — topics, subscribers, per-subscriber buffering, backpressure —
+       is the core of much of the world's messaging plumbing, and a remarkable amount of it is
+       written in Go:</p>
+    <ul>
+      <li><strong>NATS JetStream</strong> — a Go-native messaging server where every one of the
+          concepts here reappears at scale: subjects instead of a subscriber map, configurable
+          retention instead of Policy, per-consumer ack pending limits instead of buffer
+          capacity. Its "limits" vs "interest" vs "workqueue" retention modes are drop-old /
+          drop-on-ack / queue semantics you can now name.</li>
+      <li><strong>Redis pub/sub (Go clients)</strong> — go-redis's <code>PubSub</code> hands you
+          a channel of messages with a channel-size option: literally the same
+          "buffered channel per subscriber" shape, with the same open question — what happens
+          when the client can't keep up — that this project forces you to answer deliberately.</li>
+      <li><strong>Kafka consumers (sarama / franz-go)</strong> — consumer groups are fan-out
+          with durability; the per-partition buffer and <code>Channel</code>/<code>Block</code>
+          requeue strategies in sarama are DropOld-vs-Block decisions wearing production
+          clothes. Lag — Kafka's central operational metric — is exactly "how full is the
+          buffer," measured.</li>
+      <li><strong>Cloud Run / internal event buses</strong> — countless Go services glue
+          components together with small in-process brokers like this one before graduating to a
+          network broker; recognizing when you've outgrown the in-process version is the skill
+          this project sharpens.</li>
+    </ul>
+  </div>
+
+  <h3>Backpressure strategies, industry-wide</h3>
+  <ol>
+    <li><strong>Drop-new (lossy, cheap).</strong> Telemetry, metrics, log sampling: fresh data
+        beats complete data, and the producer must never stall. Prometheus scrapes and statsd
+        live here. Your <code>DropNew</code> default encodes the same judgment call: staleness
+        is worse than absence.</li>
+    <li><strong>Drop-old / evict (bounded freshness).</strong> Ring buffers in observability
+        pipelines, recent-messages views, LRU caches: keep the newest N, shed history. NATS
+        JetStream's limit-based retention and Kafka's log retention are this policy with disk
+        attached.</li>
+    <li><strong>Block (zero loss, latency risk).</strong> Financial orders, command queues:
+        losing data is unacceptable, so someone must wait — the only question is whether it's
+        the producer (your <code>PublishBlocking</code> + ctx), a broker-side queue with
+        admission control, or downstream flow control like TCP windows and HTTP/2
+        <code>SETTINGS_INITIAL_WINDOW_SIZE</code>. Every blocking system eventually rediscovers
+        the need for your context parameter: waiting must be cancellable.</li>
+  </ol>
+  <p>Most real systems compose all three per stream — which is only possible when backpressure
+     is an explicit, per-subscriber decision, exactly as it is here.</p>
+
+  <h3>Why generics (1.18+) changed library APIs</h3>
+  <p>Before Go 1.18, a reusable broker had two bad options: <code>interface{}</code> payloads
+     (runtime casts, no static safety, silent bugs at 3am) or code generation (genny-style —
+     type-safe but a build step, and N copies of the code). Generics removed the dilemma, and
+     the ecosystem responded visibly: <code>samber/lo</code> brought LINQ-style utilities,
+     constraint-rich libraries like <code>golang.org/x/exp/constraints</code> matured, and
+     container/channel APIs across the ecosystem gained type parameters. But pubsubx shows the
+     more interesting lesson: generics shine not in clever constraint math but in quiet cases
+     like this — one implementation, every payload type, errors caught where they belong
+     (compile time), and <code>[T any]</code> doing its job so unremarkably that the types just
+     disappear into the program.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="07-shorty.html">&larr; Previous: shorty</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 08 of 16</span>
+  <a class="btn" href="09-metricsd.html">Next: metricsd &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
