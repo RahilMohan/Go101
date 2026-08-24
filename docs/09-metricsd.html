@@ -403,7 +403,7 @@
 ctr, ok := c.counters[name]
 c.mu.<span class="fn">RUnlock</span>()
 <span class="kw">if</span> ok {
-    ctr.<span class="fn">Add</span>(v)   <span class="com">// hot path: one RLock'd map probe, then pure atomic</span>
+    ctr.<span class="fn">Add</span>(v)   <span class="com">// [doc annotation] hot path: one RLock'd map probe, then pure atomic</span>
     <span class="kw">return</span>
 }
 
@@ -468,9 +468,15 @@ ctr.<span class="fn">Add</span>(v)</code></pre>
      exited — shutdown means "done," not "signaled." The ticker fires before the select loop
      starts, so callers get data immediately instead of waiting a full interval (the tests rely
      on this). The inner <code>scrapeAll</code> spawns one goroutine per target and waits for
-     them all with its own <code>WaitGroup</code> — a slow target delays its own tick, not
-     other targets, and the fan-out bound is simply <code>len(targets)</code>, so no worker
-     pool machinery is needed. Every HTTP request carries the loop's context, so
+      them all with its own <code>WaitGroup</code> — within a tick the fetches run
+      concurrently, but because <code>scrapeAll</code> waits for every one of them, a slow
+      target delays everyone's <em>next</em> tick, and the fan-out bound is simply
+      <code>len(targets)</code>, so no worker
+      pool machinery is needed. That head-of-line blocking is bounded rather than fatal: the
+      daemon passes a custom <code>http.Client{Timeout}</code> driven by the
+      <code>-scrape-timeout</code> flag (default 10s), so a stalled target fails after the
+      timeout, increments its <code>&lt;name&gt;_errors</code> counter, and can never freeze
+      all collection indefinitely. Every HTTP request carries the loop's context, so
      <code>Stop</code>'s cancel reaches into any in-flight fetch. Two lifecycle rules are
      documented on the API itself: calling <code>Start</code> twice is undefined, and
      <code>Stop</code> must happen-after <code>Start</code> — the <code>cancel</code> field is
@@ -596,9 +602,10 @@ latency_count 3                        <span class="com"># number of observation
      <code>{label="value"}</code> labels. The subtle parts are the histogram conventions.
      Buckets are <strong>cumulative</strong> — each <code>le</code> ("less than or equal")
      line counts all observations up to that bound, which is why the rendering loop accumulates
-     as it goes rather than emitting raw per-bucket counts. The final
-     <code>{le="+Inf"}</code> bucket catches everything above the highest configured bound and,
-     by construction, always equals <code>_count</code>. Downstream systems derive quantiles
+      as it goes rather than emitting raw per-bucket counts. The final
+      <code>{le="+Inf"}</code> line counts <em>all</em> observations — by construction it
+      always equals <code>_count</code>; only its delta versus the last finite bound
+      represents values above that bound. Downstream systems derive quantiles
      from bucket deltas, which is why the golden test pins the cumulative layout byte-for-byte:
      emit raw counts there and every percentile your users compute becomes quietly wrong.
      Content type <code>text/plain; version=0.0.4</code> is the ecosystem's handshake saying
