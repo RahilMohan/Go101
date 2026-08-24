@@ -217,7 +217,14 @@ func (c *Collector) Snapshot(w io.Writer) error {
 	}
 	histos := make(map[string]*histogram, len(c.histos))
 	for n, h := range c.histos {
-		histos[n] = h // counts/sum are atomic; safe to read after RUnlock
+		// Counts and sums stay readable after RUnlock because each is
+		// individually atomic. Accepted tradeoff: a snapshot is
+		// eventually-consistent, not linearizable — lines may reflect
+		// different instants (a counter read after a histogram bucket,
+		// etc.). That is fine for exposition endpoints: Prometheus
+		// scrapes are point-in-time samples of an approximation, and
+		// full coherence would force every write to take the same lock.
+		histos[n] = h
 	}
 	c.mu.RUnlock()
 
@@ -330,7 +337,9 @@ func NewScraper(c *Collector, client *http.Client) *Scraper {
 // tick fetches all targets concurrently. A target's value lands in its
 // ring buffer AND updates collector gauge "<name>_last". Fetch errors
 // increment collector counter "<name>_errors" and skip the buffer
-// write. Calling Start more than once is undefined.
+// write. Calling Start more than once is undefined. Stop must happen
+// after Start (the cancel field is unsynchronized by design — set only
+// in Start, read only in Stop).
 func (s *Scraper) Start(ctx context.Context, targets []ScrapeTarget, interval time.Duration) {
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel

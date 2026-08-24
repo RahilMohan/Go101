@@ -285,8 +285,8 @@ func TestScraperTwoTicksParseAndErrorTarget(t *testing.T) {
 		func() bool { return len(s.History("pool")) >= 2 })
 
 	hist := s.History("pool")
-	if len(hist) != 2 && len(hist) > ringSize {
-		t.Fatalf("history length %d exceeds ring capacity", len(hist))
+	if len(hist) < 2 || len(hist) > ringSize {
+		t.Fatalf("history length %d, want between 2 and ring capacity %d", len(hist), ringSize)
 	}
 	for i, p := range hist {
 		if p.Value != 7 {

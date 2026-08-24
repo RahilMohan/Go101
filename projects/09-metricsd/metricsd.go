@@ -95,7 +95,9 @@ func NewScraper(c *Collector, client *http.Client) *Scraper {
 // tick fetches all targets concurrently. A target's value lands in its
 // ring buffer AND updates collector gauge "<name>_last". Fetch errors
 // increment collector counter "<name>_errors" and skip the buffer
-// write. Calling Start more than once is undefined.
+// write. Calling Start more than once is undefined. Stop must happen
+// after Start (the cancel field is unsynchronized by design — set only
+// in Start, read only in Stop).
 func (s *Scraper) Start(ctx context.Context, targets []ScrapeTarget, interval time.Duration) {
 	// TODO: Implement
 }
