@@ -108,7 +108,8 @@ func TestMulOverflow(t *testing.T) {
 
 // TestAllocExactSum verifies the core Alloc invariant: however n parts are
 // carved out of an amount, they must reassemble into exactly that amount,
-// with remainders pushed to the earliest parts.
+// with the remainder distributed one minor unit at a time to the earliest
+// parts (each early part is exactly base+step, each later part exactly base).
 func TestAllocExactSum(t *testing.T) {
 	for _, c := range []Currency{USD, EUR, JPY, BHD} {
 		for _, total := range []int64{7, 100, 12345, -5, -12345, 1} {
@@ -117,24 +118,49 @@ func TestAllocExactSum(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Alloc(%d) of %d %s: %v", n, total, c.Code, err)
 				}
+				if len(parts) != n {
+					t.Fatalf("Alloc(%d) returned %d parts", n, len(parts))
+				}
+				base := total / int64(n)
+				rem := total % int64(n)
+				step := int64(1)
+				absRem := rem
+				if rem < 0 {
+					step = -1
+					absRem = -rem
+				}
 				var sum int64
 				for i, p := range parts {
-					if len(parts) != n {
-						t.Fatalf("Alloc(%d) returned %d parts", n, len(parts))
-					}
 					if p.Currency() != c {
 						t.Errorf("part %d has wrong currency %+v", i, p.Currency())
 					}
+					want := base
+					if int64(i) < absRem {
+						want += step
+					}
+					if p.MinorUnits() != want {
+						t.Errorf("Alloc(%d) of %d %s: part[%d] = %d, want base %d (+%d if remainder goes to earliest)",
+							n, total, c.Code, i, p.MinorUnits(), base, step)
+					}
 					sum += p.MinorUnits()
-					// Remainder goes to the earliest parts: no part may be
-					// more than one unit above the base share, and once a
-					// part drops back to base all later parts are base too.
 				}
 				if sum != total {
 					t.Errorf("Alloc(%d) of %d %s: parts sum to %d", n, total, c.Code, sum)
 				}
 			}
 		}
+	}
+}
+
+// TestMinInt64String guards against sign-flip overflow in String: negating
+// MinInt64 in int64 space wraps to itself, so String must compute the
+// magnitude in uint64 space. Expected literal computed by hand:
+// |MinInt64| = 9223372036854775808 minor = 92233720368547758 major + .08.
+func TestMinInt64String(t *testing.T) {
+	got := NewAmount(math.MinInt64, USD).String()
+	want := "-92233720368547758.08 USD"
+	if got != want {
+		t.Errorf("NewAmount(math.MinInt64, USD).String() = %q, want %q", got, want)
 	}
 }
 
@@ -288,15 +314,14 @@ func FuzzParseAmount(f *testing.F) {
 // FuzzAdd checks the inverse-operation property: when currencies match and
 // Add succeeds, adding b then subtracting b returns exactly a.
 func FuzzAdd(f *testing.F) {
-	codes := []byte{0, 1, 2, 3}
-	f.Add(int64(150), int64(25), codes[0])
-	f.Add(int64(math.MaxInt64), int64(1), codes[0])
-	f.Add(int64(math.MinInt64), int64(-1), codes[1])
-	f.Add(int64(0), int64(0), codes[2])
-	f.Add(int64(-7), int64(13), codes[3])
+	f.Add(int64(150), int64(25), byte(0))
+	f.Add(int64(math.MaxInt64), int64(1), byte(0))
+	f.Add(int64(math.MinInt64), int64(-1), byte(1))
+	f.Add(int64(0), int64(0), byte(2))
+	f.Add(int64(-7), int64(13), byte(3))
 
 	f.Fuzz(func(t *testing.T, x, y int64, cur byte) {
-		c := []Currency{USD, EUR, JPY, BHD}[int(cur)%len(codes)]
+		c := []Currency{USD, EUR, JPY, BHD}[int(cur)%4]
 		a, b := NewAmount(x, c), NewAmount(y, c)
 
 		mismatch, err := NewAmount(x, USD).Add(NewAmount(y, JPY))

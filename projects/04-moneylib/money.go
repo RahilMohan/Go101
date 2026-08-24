@@ -14,10 +14,15 @@ type Currency struct {
 }
 
 var (
+	// USD is United States dollar with two decimal places (cents).
 	USD = Currency{"USD", 2}
+	// EUR is Euro with two decimal places (cents).
 	EUR = Currency{"EUR", 2}
+	// JPY is Japanese yen with no decimal places.
 	JPY = Currency{"JPY", 0}
-	BHD = Currency{"BHD", 3} // 3-exponent case proves generality
+	// BHD is Bahraini dinar with three decimal places (fils), proving the
+	// library generalizes beyond two-decimal currencies.
+	BHD = Currency{"BHD", 3}
 )
 
 // ErrCurrencyMismatch is returned when an operation combines Amounts in

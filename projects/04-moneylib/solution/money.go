@@ -161,22 +161,21 @@ func (a Amount) Alloc(n int) ([]Amount, error) {
 // width, so String is canonical and round-trips through ParseAmount.
 func (a Amount) String() string {
 	var sb strings.Builder
-	m := a.minor
-	if m < 0 {
+	um := abs64(a.minor)
+	if a.minor < 0 {
 		sb.WriteByte('-')
-		m = -m
 	}
 	if exp := a.currency.Exponent; exp > 0 {
-		div := pow10(exp)
-		sb.WriteString(strconv.FormatInt(m/div, 10))
+		div := uint64(pow10(exp))
+		sb.WriteString(strconv.FormatUint(um/div, 10))
 		sb.WriteByte('.')
-		frac := strconv.FormatInt(m%div, 10)
+		frac := strconv.FormatUint(um%div, 10)
 		for i := len(frac); i < exp; i++ {
 			sb.WriteByte('0')
 		}
 		sb.WriteString(frac)
 	} else {
-		sb.WriteString(strconv.FormatInt(m, 10))
+		sb.WriteString(strconv.FormatUint(um, 10))
 	}
 	sb.WriteByte(' ')
 	sb.WriteString(a.currency.Code)
