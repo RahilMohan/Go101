@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 05 — gopherfetch</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>gopherfetch</h1>
+  <p class="subtitle">Go101 · Project 05 — a concurrent link checker</p>
+  <div class="badge-row">
+    <span class="badge tier">Intermediate Tier</span>
+    <span class="badge">net/http</span>
+    <span class="badge">goroutines</span>
+    <span class="badge">sync.WaitGroup</span>
+    <span class="badge">context</span>
+    <span class="badge">time.Ticker</span>
+    <span class="badge">Worker pool</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: stdlib concurrency, nothing else</h3>
+  <p>gopherfetch is built from four load-bearing stdlib packages — <code>net/http</code>,
+     <code>context</code>, <code>sync</code>, and <code>time</code> — plus <code>errors</code> in a
+     supporting role. No <code>errgroup</code>, no worker-pool library, no crawling framework,
+     no <code>go.sum</code>. Projects 01–04 proved parsing, persistence, and API design don't need
+     dependencies; project 05 makes the stakes higher, because concurrency is where hand-rolled
+     code is most tempting to replace with a library — and where replacing it costs you the most
+     understanding.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in gopherfetch</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>net/http</code></td><td>One shared <code>http.Client</code> with a tuned <code>Transport</code>; HEAD requests; redirect policy via <code>CheckRedirect</code></td><td>A client is configurable machinery, not a black box — pooling, timeouts, and redirect caps are knobs you own</td></tr>
+      <tr><td><code>context</code></td><td>Caller cancellation flows into every request; each request derives its own timeout child</td><td>Cancellation is a tree: parent cancel stops everything downstream, children add their own deadlines without breaking the parent's</td></tr>
+      <tr><td><code>sync</code></td><td><code>WaitGroup</code> joins the fixed worker pool; disjoint slice indices mean no mutexes anywhere</td><td>Join semantics from first principles — and how careful data ownership removes locks entirely</td></tr>
+      <tr><td><code>time</code></td><td><code>Ticker</code> paces dispatches in <code>CheckRateLimited</code>; durations measure per-request wall time</td><td>Rate limiting as a select over a tick channel, not a sleep — and why the ticker must be stopped</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong><code>golang.org/x/sync/errgroup</code> already at this stage</strong> — errgroup
+        is a genuinely good tool, and this curriculum isn't against it. But it compresses exactly
+        the mechanics this project exists to teach: <code>wg.Add</code>/<code>Done</code> pairing,
+        dispatch loops over a jobs channel, and join-before-read discipline become one
+        <code>g.Go(func() ...)</code> call each. errgroup gets taught properly in project 12 —
+        <em>after</em> you've built what it abstracts, so you know what you're trading away when
+        you reach for it.</li>
+    <li><strong>Third-party worker-pool libraries</strong> — packages offering
+        <code>pool.Submit(fn)</code> with tunable sizing would hide the WaitGroup mechanics behind
+        an API, leaving you unable to answer "what happens to queued work when the context dies?"
+        A pool library is a fine production choice precisely because its failure modes are the
+        ones you learn to reason about here.</li>
+    <li><strong>colly / crawling frameworks</strong> — Go's most popular scraper would turn this
+        into configuration: selectors, depth limits, politeness settings. But then the lesson
+        becomes "read colly's docs" instead of "understand why a fixed pool of workers draining an
+        index channel produces ordered, bounded, cancellable output." The checking logic here is
+        ~100 lines; owning them is the point.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Worker-pool anatomy from first principles.</strong> Every concurrent system you'll
+        ever debug reduces to the same skeleton: a work source, N executors, a way to join, and a
+        cancellation path. Building that skeleton by hand — dispatcher, workers,
+        <code>close(jobs)</code>, <code>wg.Wait()</code> — makes the pattern permanent in a way
+        no library call can.</li>
+    <li><strong>Deterministic result ordering as a testable property.</strong> Concurrent output
+        feels inherently unordered until you see the trick: write each result at the index of its
+        input, and order falls out for free. More importantly, the suite <em>proves</em> the
+        property under adversarial latency, turning "should be ordered" from a hope into a
+        regression-tested invariant.</li>
+    <li><strong>Cancellation as a first-class return value.</strong> When the caller's context
+        dies mid-run, gopherfetch doesn't panic, block, or drop URLs silently — it returns a
+        complete result set where abandoned slots carry <code>ctx.Err()</code>. Partial-success
+        semantics under cancellation are a design skill, not an accident.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>gopherfetch_test.go</code> — the executable specification. If
+     your implementation passes these tests (including under <code>-race -count=3</code>), it
+     satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Concurrency stays inside the pool bound.</strong> Checking 50 URLs with
+        5 workers never exceeds 5 simultaneous in-flight requests — but reaches at least 2, so a
+        purely sequential implementation fails too.</li>
+    <li><strong>R2 — Results preserve input order.</strong> With a server engineered so later
+        URLs finish earlier (reverse-scaled sleeps), <code>results[i].URL == urls[i]</code> for
+        every i despite wildly shuffled completion order.</li>
+    <li><strong>R3 — Cancellation abandons the rest but returns everything.</strong> When the
+        context is canceled after some checks complete, <code>Check</code> returns all n results:
+        finished ones carry statuses, unsent ones wrap <code>context.Canceled</code>, and both
+        groups are non-empty.</li>
+    <li><strong>R4 — Per-request timeout fires and reports cleanly.</strong> A handler blocked
+        forever with a 50ms timeout yields one result whose error satisfies
+        <code>errors.Is(err, context.DeadlineExceeded)</code>, with <code>Status == 0</code>, in
+        roughly the timeout duration rather than hanging.</li>
+    <li><strong>R5 — Error taxonomy separates transport failures from statuses.</strong>
+        Connection refused gives non-nil <code>Err</code> with <code>Status == 0</code>; an HTTP
+        404 gives <code>Status == 404</code> with nil <code>Err</code> (a status is data, not an
+        error).</li>
+    <li><strong>R6 — Redirect chains cap at three hops.</strong> A server offering four hops is
+        followed only through three; the final reported status is the third hop's 302, and the
+        destination URL is provably never requested.</li>
+    <li><strong>R7 — Rate limiting spaces request starts.</strong> Six requests at a 30ms
+        interval take at least ~150ms total — an unthrottled implementation finishes in
+        milliseconds and fails the bound.</li>
+    <li><strong>R8 — Invalid worker count errors per-result, not by panicking.</strong>
+        <code>NewChecker(0 or negative, …)</code>'s Check returns one errored Result per URL
+        (wrapping <code>ErrNoWorkers</code>) instead of crashing.</li>
+    <li><strong>R9 — Empty input returns empty results.</strong> <code>Check(ctx, nil)</code>
+        yields a zero-length slice with no goroutines spawned.</li>
+    <li><strong>R10 — No goroutine leaks.</strong> After a 20-URL run plus
+        <code>CloseIdleConnections()</code> and a settle delay, <code>runtime.NumGoroutine()</code>
+        is back within 2 of the baseline.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Bounded resources.</strong> Goroutines scale with the configured worker
+        count, never with the URL list length; pooled idle connections are releasable on demand
+        so long-lived processes can quiesce.</li>
+    <li><strong>NF2 — Deterministic output.</strong> Result ordering is a function of input
+        ordering alone — identical inputs produce byte-identical result sequences on every run,
+        every platform.</li>
+    <li><strong>NF3 — Flake-free under load.</strong> The whole suite must pass repeatedly
+        (<code>-count=3</code>) with the race detector (<code>-race</code>) enabled on a loaded
+        machine; timing assertions are backstops, not primary proofs.</li>
+    <li><strong>NF4 — Graceful partial failure.</strong> Cancellation is surfaced as data
+        (<code>Result.Err</code> wrapping <code>ctx.Err()</code>), letting callers distinguish
+        "checked and failed" from "never checked."</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Dispatcher/worker split over a jobs channel of indices</h3>
+  <pre><code>jobs := <span class="fn">make</span>(<span class="kw">chan</span> <span class="typ">int</span>)
+<span class="kw">var</span> wg sync.<span class="typ">WaitGroup</span>
+wg.<span class="fn">Add</span>(<span class="fn">min</span>(c.workers, n))
+<span class="kw">for</span> <span class="kw">range</span> <span class="fn">min</span>(c.workers, n) {
+    <span class="kw">go func</span>() {
+        <span class="kw">defer</span> wg.<span class="fn">Done</span>()
+        <span class="kw">for</span> idx := <span class="kw">range</span> jobs {
+            results[idx] = c.<span class="fn">doOne</span>(ctx, urls[idx])
+        }
+    }()
+}</code></pre>
+  <p>The design separates two concerns that naive implementations entangle. The
+     <strong>dispatcher</strong> (the calling goroutine) owns scheduling: it walks indices in
+     order, respects the rate ticker and the context, and pushes work into an unbuffered
+     channel — which means dispatch naturally blocks when all workers are busy, giving you the
+     pool bound for free. The <strong>workers</strong> own execution only: pull an index, check
+     the URL, write the result, repeat. Because <code>min(workers, n)</code> workers start, a
+     two-URL run doesn't spin up eight idle goroutines. Note what the unbuffered channel buys:
+     there is no queue whose length needs bounding, because the channel <em>is</em> the bound —
+     at most one undelivered job exists at any instant.</p>
+
+  <h3>D2: An indexed results slice beats a results channel</h3>
+  <pre><code>results := <span class="fn">make</span>([]<span class="typ">Result</span>, len(urls))
+...
+results[idx] = c.<span class="fn">doOne</span>(ctx, urls[idx])   <span class="com">// each worker owns disjoint indices</span></code></pre>
+  <p>The obvious alternative — workers send <code>Result</code> values down a second channel and
+     someone reassembles them — creates three new problems: a collector goroutine (more
+     lifecycle), a map or sort step to restore input order (the very nondeterminism we're
+     avoiding), and a synchronization question about when reading is safe. Writing directly at
+     <code>idx</code> eliminates all three at once. It is race-free because each index is handed
+     to exactly one worker — the slices' elements have disjoint owners, so there is no shared
+     mutable state and no mutex. And the read-after-write safety comes from a single
+     well-defined edge: <code>wg.Wait()</code> establishes a happens-before relationship between
+     every worker's final write and the dispatcher's subsequent read of the whole slice. One
+     primitive, zero locks, perfect order.</p>
+
+  <h3>D3: Filled-marker repair on cancellation</h3>
+  <pre><code>filled := <span class="fn">make</span>([]<span class="typ">bool</span>, n)
+
+dispatch:
+    <span class="kw">for</span> idx := <span class="kw">range</span> n {
+        <span class="kw">select</span> {
+        <span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>():
+            <span class="kw">break</span> dispatch
+        <span class="kw">case</span> jobs &lt;- idx:
+            filled[idx] = <span class="kw">true</span>
+        }
+    }
+<span class="fn">close</span>(jobs)  <span class="com">// workers drain what was sent, then exit</span>
+wg.<span class="fn">Wait</span>()
+
+<span class="kw">if</span> err := ctx.<span class="fn">Err</span>(); err != <span class="kw">nil</span> {
+    <span class="kw">for</span> i := <span class="kw">range</span> results {
+        <span class="kw">if</span> !filled[i] {  <span class="com">// never scheduled, so never checked</span>
+            results[i] = <span class="typ">Result</span>{URL: urls[i], Err: err}
+        }
+    }
+}
+<span class="kw">return</span> results</code></pre>
+  <p>When the context dies, some slots were checked (real data), and some were never dispatched
+     (still zero values). How do you tell them apart? Scanning for "looks like a zero
+     <code>Result</code>" is a trap: <code>{URL: "", Status: 0, Err: nil}</code> could collide
+     with legitimate outcomes, and any heuristic based on Status or Duration is guessing. The
+     dispatcher instead records <code>filled[i] = true</code> at the moment index i is handed to
+     a worker — written only by the dispatcher itself, so it needs no synchronization. After
+     <code>wg.Wait()</code>, every unfilled slot is repaired with
+     <code>Err: ctx.Err()</code>. The contract that emerges is strong: <strong>Check always
+     returns len(urls) results</strong>, canceled or not, which is exactly what makes the
+     CLI's per-line reporting possible.</p>
+
+  <h3>D4: Shared Transport sized to the pool</h3>
+  <pre><code>client: &amp;http.<span class="typ">Client</span>{
+    Transport: &amp;http.<span class="typ">Transport</span>{
+        <span class="com">// Idle-connection pooling is per host; sizing it to the</span>
+        <span class="com">// pool avoids churn when every worker hits the same host.</span>
+        MaxIdleConns:        workers,
+        MaxIdleConnsPerHost: workers,
+    },
+}</code></pre>
+  <p>All workers share one client, and therefore one connection pool — the default Transport
+     keeps only 2 idle connections <em>per host</em>, so eight workers hammering one server would
+     constantly close and re-open TCP connections (and TLS handshakes) that should have been
+     reused. Setting both idle caps to <code>workers</code> lets every worker keep its warm
+     connection alive. This is also why <code>CloseIdleConnections()</code> exists on Checker:
+     pooled keep-alive connections each hold a reader goroutine, and the leak test can't get a
+     clean baseline unless the pool can be deliberately drained — a real concern for long-lived
+     processes too, not just tests.</p>
+
+  <h3>D5: HEAD requests and the redirect cap</h3>
+  <pre><code>req, err := http.<span class="fn">NewRequestWithContext</span>(reqCtx, http.<span class="typ">MethodHead</span>, url, <span class="kw">nil</span>)
+...
+CheckRedirect: <span class="kw">func</span>(_ *http.<span class="typ">Request</span>, via []*http.<span class="typ">Request</span>) <span class="typ">error</span> {
+    <span class="kw">if</span> len(via) &gt;= maxRedirects {
+        <span class="kw">return</span> http.<span class="typ">ErrUseLastResponse</span>  <span class="com">// report the 3xx instead of following hop four</span>
+    }
+    <span class="kw">return</span> <span class="kw">nil</span>
+},</code></pre>
+  <p>A link checker asks "does this URL respond OK?" — it doesn't need the body, so
+     <code>HEAD</code> avoids transferring bytes entirely. Redirects need a policy because real
+     web links can chain indefinitely: returning <code>http.ErrUseLastResponse</code> from
+     <code>CheckRedirect</code> stops the chase and hands back the 3xx response itself, so the
+     caller sees <code>Status: 302</code> rather than whatever lies at the end of the chain (a
+     login page, a tracking pixel, a loop). Three hops covers ordinary redirects while refusing
+     to be weaponized into an infinite crawl. Crucially, the request carries
+     <code>reqCtx</code> — derived from the caller's context — so cancellation and the optional
+     per-request timeout both reach the transport layer, where they can actually interrupt
+     in-flight network I/O.</p>
+
+  <h3>D6: Library core, thin command shell</h3>
+  <pre><code>projects/05-gopherfetch/
+├── gopherfetch.go            <span class="com"># package gopherfetch — stubs you implement</span>
+├── gopherfetch_test.go       <span class="com"># the executable spec</span>
+└── solution/
+    ├── gopherfetch.go        <span class="com"># package solution — Checker, run engine, doOne</span>
+    └── cmd/gopherfetch/main.go  <span class="com"># flags, signal handling, report lines</span></code></pre>
+  <p>The library knows nothing about terminals; <code>main</code> knows nothing about channels.
+     The CLI adds flags (<code>-c</code> workers, <code>-timeout</code>,
+     <code>-rate</code>), wires <code>signal.NotifyContext</code> so Ctrl-C cancels the run
+     mid-flight, and renders the taxonomy:</p>
+  <pre><code>OK   200  12ms  https://x
+SKIP 0    0s    https://y  context canceled
+FAIL 0    3ms   https://z  Get "https://z": connection refused</code></pre>
+  <p>The SKIP/FAIL split is deliberate and worth internalizing: only results wrapping
+     <code>context.Canceled</code> print as SKIP and are excluded from the "checked" count —
+     they were never really checked. Everything else with an error prints FAIL, including a
+     per-request timeout (<code>DeadlineExceeded</code>): if the deadline belongs to
+     <em>this</em> URL's request, the check genuinely ran and genuinely failed. That distinction
+     — caller gave up vs. this URL failed — is exactly the information
+     <code>errors.Is</code> over the wrapped chain provides.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Goroutine lifecycle and leaks — measuring with NumGoroutine</h3>
+  <pre><code>before := runtime.<span class="fn">NumGoroutine</span>()
+c := <span class="fn">NewChecker</span>(<span class="num">8</span>, <span class="num">0</span>)
+c.<span class="fn">Check</span>(context.<span class="fn">Background</span>(), urls)
+c.<span class="fn">CloseIdleConnections</span>()
+time.<span class="fn">Sleep</span>(<span class="num">200</span> * time.Millisecond)  <span class="com">// settle: let closed conns' goroutines exit</span>
+
+<span class="kw">if</span> delta := runtime.<span class="fn">NumGoroutine</span>() - before; delta &gt; <span class="num">2</span> {
+    t.<span class="fn">Errorf</span>(<span class="str">"goroutines grew by %d after Check, want &lt;= 2 (leaked workers or conns)"</span>, delta)
+}</code></pre>
+  <p>A leaked goroutine is the concurrency analog of a memory leak: invisible in functional
+     tests, fatal at scale. The classic causes are all here to be learned — a worker blocked
+     forever on a channel nobody closes, a <code>WaitGroup</code> counter that never reaches
+     zero, or (subtler) pooled HTTP connections whose background read loops outlive the
+     requests that made them. <code>runtime.NumGoroutine()</code> turns leakage into a number
+     you can assert on: snapshot before, run, drain the connection pool with
+     <code>CloseIdleConnections</code>, give the runtime a moment to reap exited goroutines,
+     and compare. The tolerance (&le;2) acknowledges that runtimes and test infrastructure spawn
+     goroutines too — the assertion catches <em>trend</em>, not exact counts, which is the only
+     honest way to test this. The habit transfers directly to production: any server that grows
+     goroutine count monotonically under load has a bug shaped like a missing
+     <code>close(jobs)</code>.</p>
+
+  <h3>sync.WaitGroup semantics — Add-before-go, defer Done</h3>
+  <pre><code>wg.<span class="fn">Add</span>(<span class="fn">min</span>(c.workers, n))          <span class="com">// before any goroutine starts</span>
+<span class="kw">for</span> <span class="kw">range</span> <span class="fn">min</span>(c.workers, n) {
+    <span class="kw">go func</span>() {
+        <span class="kw">defer</span> wg.<span class="fn">Done</span>()         <span class="com">// first statement, not last</span>
+        <span class="kw">for</span> idx := <span class="kw">range</span> jobs { ... }
+    }()
+}
+...
+wg.<span class="fn">Wait</span>()                       <span class="com">// join; happens-before edge for reads of results</span></code></pre>
+  <p>The WaitGroup is Go's join barrier, and its rules are stricter than they look.
+     <code>Add</code> must happen before the <code>go</code> statement: if you incremented
+     inside the new goroutine, <code>Wait</code> could observe the counter at zero before the
+     goroutine even ran, ending the wait prematurely. <code>Done</code> belongs in a
+     <code>defer</code> so panics inside the loop still decrement the counter — otherwise one
+     panicking worker deadlocks every future <code>Wait</code>. And <code>Wait</code> is more
+     than bookkeeping: it synchronizes memory. Everything a worker wrote before
+     <code>Done</code> — including its slot in <code>results</code> — is guaranteed visible to
+     whoever returns from <code>Wait</code>. That guarantee is why D2's lock-free design is
+     correct, not lucky.</p>
+
+  <h3>The context tree — parent cancel plus per-request timeout</h3>
+  <pre><code>reqCtx := ctx
+<span class="kw">if</span> c.timeout &gt; <span class="num">0</span> {
+    <span class="kw">var</span> cancel context.<span class="typ">CancelFunc</span>
+    reqCtx, cancel = context.<span class="fn">WithTimeout</span>(ctx, c.timeout)
+    <span class="kw">defer</span> cancel()
+}
+req, err := http.<span class="fn">NewRequestWithContext</span>(reqCtx, http.<span class="typ">MethodHead</span>, url, <span class="kw">nil</span>)</code></pre>
+  <p>Contexts form a tree, and cancellation flows strictly downward. Here each request derives
+     its own child of the caller's context: the child fires when <em>either</em> the parent is
+     canceled (Ctrl-C, upstream deadline) <em>or</em> its own 50ms elapses, whichever comes
+     first. Two consequences matter. First, the per-request timer cannot outlive its purpose —
+     the deferred <code>cancel()</code> releases the timer the moment the request finishes, so a
+     fast run on ten thousand URLs never holds ten thousand live timers. Second, error identity
+     tells you <em>which</em> trigger fired: <code>errors.Is(err, context.Canceled)</code> means
+     the caller aborted; <code>errors.Is(err, context.DeadlineExceeded)</code> means this
+     specific request timed out. The CLI exploits exactly that split when choosing SKIP versus
+     FAIL. Passing the context into <code>NewRequestWithContext</code> is what connects the
+     tree to the network: the transport watches the context and tears the request down mid-
+     flight when it fires — no polling, no goroutine-per-check watchdog required.</p>
+
+  <h3>time.Ticker rate limiting — pacing the dispatch loop</h3>
+  <pre><code><span class="kw">var</span> tick &lt;-<span class="kw">chan</span> time.<span class="typ">Time</span>
+<span class="kw">if</span> interval &gt; <span class="num">0</span> {
+    ticker := time.<span class="fn">NewTicker</span>(interval)
+    <span class="kw">defer</span> ticker.<span class="fn">Stop</span>()
+    tick = ticker.C
+}
+
+dispatch:
+    <span class="kw">for</span> idx := <span class="kw">range</span> n {
+        <span class="kw">if</span> tick != <span class="kw">nil</span> &amp;&amp; idx &gt; <span class="num">0</span> {
+            <span class="kw">select</span> {
+            <span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>():
+                <span class="kw">break</span> dispatch
+            <span class="kw">case</span> &lt;-tick:
+            }
+        }
+        ...</code></pre>
+  <p>Rate limiting lives in the dispatcher, not the workers — capping request <em>starts</em> at
+     one per interval automatically caps the whole system, because workers can't invent work.
+     The shape is a <code>select</code> over the tick channel and <code>ctx.Done()</code>: wait
+     for either permission to proceed or an order to stop, never just one. Skipping the Done arm
+     would make cancellation stall for up to one interval per remaining URL. The first request
+     skips the wait (<code>idx &gt; 0</code>), so latency isn't paid unnecessarily.
+     <code>defer ticker.Stop()</code> releases the timer resource — a running Ticker holds a
+     runtime timer that would otherwise linger for the process lifetime. Compare this to the
+     naive <code>time.Sleep(interval)</code> between sends: a sleep can't be interrupted by
+     cancellation, whereas the select wakes instantly on either event. This ticker-select is
+     also, verbatim, the skeleton of token-bucket limiters throughout production Go code.</p>
+
+  <h3>Writing flake-free concurrency tests</h3>
+  <div class="callout">
+    <p><strong>The rule:</strong> assert on <em>counts and identities</em> that are true by
+       construction; use timing only as a coarse backstop with huge margins; never assert that
+       the scheduler behaved nicely on your machine today.</p>
+  </div>
+  <p>Concurrency tests fail spuriously when they encode assumptions about timing. The suite
+     survives loaded CI machines and <code>-race</code> overhead through several techniques.
+     The atomic max-tracker records peak concurrency without locks or lost updates:</p>
+  <pre><code><span class="kw">type</span> <span class="typ">concurrencyTracker</span> <span class="kw">struct</span> {
+    inFlight <span class="typ">int64</span>
+    maxSeen  <span class="typ">int64</span>
+}
+
+cur := atomic.<span class="fn">AddInt64</span>(&amp;t.inFlight, <span class="num">1</span>)
+<span class="kw">for</span> {
+    old := atomic.<span class="fn">LoadInt64</span>(&amp;t.maxSeen)
+    <span class="kw">if</span> cur &lt;= old || atomic.<span class="fn">CompareAndSwapInt64</span>(&amp;t.maxSeen, old, cur) {
+        <span class="kw">break</span>
+    }
+}</code></pre>
+  <p>The CAS loop is the standard lock-free "max" update: read the current max, and swap in
+     yours only if nobody else raised it meanwhile — retrying on contention. A plain
+     non-atomic <code>if cur &gt; max { max = cur }</code> is itself a data race, which
+     <code>-race</code> would flag inside the very test meant to prove thread safety. Then the
+     assertions are two-sided but tolerant: <code>maxSeen &gt; 5</code> fails (bound violated —
+     a hard property), <code>maxSeen &lt; 2</code> fails (never parallelized), and anything
+     between passes. Timing bounds appear only as backstops with enormous headroom: the
+     cancellation test allows 250ms where the serial worst case is 200ms and the expected case
+     is ~30ms — loose enough to survive any scheduler, tight enough to catch an implementation
+     that ignores the context entirely. Wherever possible, correctness is proven by counting
+     events, not by clock-watching.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Pool-bound proof via an in-flight counter</h3>
+  <p><code>TestCheckRespectsWorkerPoolBound</code> wraps a normal httptest handler in a tracker
+     that increments on entry and decrements on exit, recording the high-water mark. Fifty URLs
+     against five workers, each request widened to 10ms so overlaps are statistically certain.
+     The beauty is that the assertion tests the <em>implementation's</em> promise, not the
+     test's patience: an unbounded <code>go checkURL(u)</code>-per-URL implementation spikes
+     toward 50 in-flight requests and fails immediately; a sequential loop fails the
+     <code>maxSeen &gt;= 2</code> floor; only a genuine pool lands in the legal window. The
+     counter is built from atomics precisely so the measuring instrument cannot introduce the
+     race it's hunting.</p>
+
+  <h3>Determinism under shuffled completion order</h3>
+  <pre><code><span class="com">// Later URLs finish earlier: a completion-order bug would shuffle</span>
+<span class="com">// results even if scheduling were otherwise correct.</span>
+time.<span class="fn">Sleep</span>(time.<span class="fn">Duration</span>(n-idx) * <span class="num">5</span> * time.Millisecond)</code></pre>
+  <p><code>TestCheckPreservesInputOrder</code> engineers the worst case on purpose: URL 11
+     finishes in 5ms while URL 0 takes 60ms — completion order is almost the reverse of input
+     order. If results arrived in completion sequence, the final slice would visibly scramble.
+     Asserting <code>results[i].URL == urls[i]</code> across all twelve slots converts "output
+     should probably match input" from folklore into a pinned contract. Any implementation that
+     appends to a shared slice from workers (racy <em>and</em> disordered), or collects through
+     a channel without reassembly, fails this test loudly.</p>
+
+  <h3>Cancellation produces honest partials</h3>
+  <p><code>TestCheckContextCancellationAbandonsRest</code> choreographs a realistic abort: the
+     server signals each completed response through a channel, and a goroutine waits for the
+     first success, pauses 10ms, then cancels the context. The assertions then demand the full
+     contract at once: all 20 results exist, at least one succeeded (<code>ok &gt; 0</code>), at
+     least one wraps <code>context.Canceled</code> (<code>canceled &gt; 0</code>), nothing else
+     appears, and total elapsed time proves work was actually abandoned rather than politely
+     finished. The elapsed check is explicitly labeled a backstop in the test comments — the
+     ok/canceled partition is the primary proof; 250ms of headroom exists only to catch a
+     context-ignoring implementation without flaking on a slow machine.</p>
+
+  <h3>Error taxonomy as executable cases</h3>
+  <p><code>TestErrorTaxonomy</code> packs three servers into one table of reality: a
+     pre-closed port (connection refused → <code>Err != nil, Status == 0</code>), a 404
+     endpoint (<code>Status == 404, Err == nil</code> — a status is data), and a four-hop
+     redirect chain where an atomic counter proves the fourth hop is never requested and the
+     third hop's 302 is what gets reported. Together with
+     <code>TestPerRequestTimeout</code> (blocked-forever handler, 50ms budget,
+     <code>DeadlineExceeded</code> asserted through <code>errors.Is</code>, prompt elapsed
+     time) and <code>TestInvalidWorkerCountFailsAtCheckTime</code> (misconfiguration surfaces
+     as per-result errors, not a panic), the taxonomy — refused / status / redirected / timed
+     out / misconfigured — is fully enumerated. There is no outcome the CLI can receive that
+     some test hasn't characterized.</p>
+
+  <h3>The -count=3 -race flake protocol</h3>
+  <pre><code>go test -race -count=3 ./projects/05-gopherfetch/...</code></pre>
+  <p>Concurrency bugs are probabilistic, so proving their absence requires repetition:
+     <code>-count=3</code> runs the suite three times in one process, multiplying exposure to
+     interleaving luck, and <code>-race</code> instruments every memory access to catch races
+     that didn't happen to corrupt anything this run. A test suite that passes once but flakes
+     on repetition is worse than one that fails consistently — it trains people to rerun
+     instead of investigate. Every timing-sensitive assertion in this suite was designed under
+     this protocol: primary assertions count events (results, statuses, hits), timing appears
+     only as generously-bounded backstops, and the measurement tools themselves (atomic CAS
+     trackers) are race-clean. Run the protocol before declaring victory; it is the difference
+     between "passed on my laptop" and "correct."</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>Fixed worker pools, context-driven cancellation, and shared HTTP clients are the working
+       skeleton of much of the internet's tooling — a lot of it written in Go:</p>
+    <ul>
+      <li><strong>Prometheus blackbox_exporter</strong> — probes endpoints (HTTP, TCP, ICMP) on
+          a schedule and exports up/down metrics; each probe is a bounded, timeout-carrying HTTP
+          request derived from a scheduling context, i.e. exactly a <code>doOne</code> call with
+          better dashboards.</li>
+      <li><strong>Kubernetes controllers</strong> — every controller runs a reconcile loop that
+          lists desired state, fans out work through bounded worker pools, and honors
+          <code>ctx.Done()</code> on shutdown. The dispatcher/worker/join structure you built
+          here <em>is</em> the structure of <code>controller-runtime</code>'s worker queues;
+          deployment rollouts are cancellation-aware fan-outs.</li>
+      <li><strong>Hugo's build pipeline</strong> — the static site generator parallelizes page
+          rendering across a fixed pool sized to CPU count, joining before write-out — the same
+          WaitGroup discipline, applied to thousands of Markdown files.</li>
+      <li><strong>godoc and Go's own tooling</strong> — the documentation server and pkg.go.dev
+          crawl, fetch, and render package sources concurrently with shared transports and
+          polite rate limits; link extraction and verification has been part of Go's toolchain
+          story since the language's earliest days.</li>
+    </ul>
+  </div>
+
+  <h3>Why Go owns cloud infrastructure tooling</h3>
+  <ol>
+    <li><strong>Goroutines make the concurrency model cheap.</strong> A worker pool of hundreds
+        of goroutines costs kilobytes of stack — not OS threads. That's why a single Go process
+        comfortably probes thousands of endpoints (blackbox_exporter) or reconciles tens of
+        thousands of objects (kube-controller-manager): the unit of concurrency is nearly free,
+        so bounding it is a design choice, not a survival tactic.</li>
+    <li><strong>context made cancellation universal.</strong> Before <code>context</code> became
+        the convention, every library invented its own shutdown story. Now a kubectl delete, a
+        pod eviction, and an HTTP request timeout all speak the same interface — which is why
+        the pattern of deriving child contexts with their own deadlines composes across
+        ecosystem boundaries. Learning the tree here means reading any production Go call chain
+        and knowing exactly what dies when.</li>
+    <li><strong>Reconcile loops are this project, renamed.</strong> Desired state = your URL
+        list. Workers = your pool. Results slice = observed status. Cancellation = graceful
+        shutdown, with partial progress preserved. Kubernetes won partly because its control
+        loops are boring, legible instances of the pattern you just implemented — when you read
+        controller code someday, it will look familiar in the best way.</li>
+  </ol>
+  <p>The through-line: a jobs channel, a fixed set of workers, a WaitGroup join, and a context
+     threading through everything is not a teaching toy. It's the load-bearing pattern of the
+     systems running the cloud — exercised here in under 200 lines, with the race detector
+     keeping you honest.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="04-moneylib.html">&larr; Previous: moneylib</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 05 of 16</span>
+  <a class="btn" href="06-chatwire.html">Next: chatwire &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
