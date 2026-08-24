@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 06 — chatwire</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>chatwire</h1>
+  <p class="subtitle">Go101 · Project 06 — a multi-client TCP chat server</p>
+  <div class="badge-row">
+    <span class="badge tier">Intermediate Tier</span>
+    <span class="badge">net</span>
+    <span class="badge">net.Listener / net.Conn</span>
+    <span class="badge">goroutines</span>
+    <span class="badge">select</span>
+    <span class="badge">channels</span>
+    <span class="badge">context</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: raw TCP from the net package</h3>
+  <p>chatwire is built directly on Go's raw socket layer — <code>net</code> for
+     <code>Listener</code>/<code>Conn</code>, <code>bufio</code> for line framing,
+     <code>context</code> for shutdown deadlines, and plain channels for every piece of
+     coordination. No HTTP, no websocket library, no RPC framework, no
+     <code>go.sum</code>. After project 05's <code>net/http</code>, dropping down to bare
+     TCP feels like removing training wheels: you see exactly where connections come from,
+     who owns each one, and what a &ldquo;message&rdquo; actually is before any protocol exists.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in chatwire</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>net</code></td><td><code>Listen</code>/<code>Dial</code>/<code>Accept</code>; per-connection <code>Conn</code> with deadline control; force-close via <code>conn.Close()</code></td><td>Connection lifecycle ownership — accept loops, read/write deadlines, and why closing a conn is the universal interrupt</td></tr>
+      <tr><td><code>bufio</code></td><td>Newline-delimited read framing (<code>ReadString('\n')</code>)</td><td>A protocol is just an agreement about byte boundaries — and you can define one yourself in five lines</td></tr>
+      <tr><td>channels + <code>select</code></td><td>Request channels into the hub; bounded out-queues per client; subscriber channels</td><td>Channel-ownership patterns: one goroutine owns the maps, everyone else communicates by channel</td></tr>
+      <tr><td><code>context</code></td><td><code>Shutdown(ctx)</code> bounded by a caller deadline, with force-close fallback</td><td>Graceful shutdown as polite-drain-then-force under a deadline, including the already-expired fast path</td></tr>
+      <tr><td><code>sync</code></td><td><code>WaitGroup</code> joining writer goroutines; two small mutexes at the edges only</td><td>Knowing when locks <em>aren't</em> the answer — and when a tiny edge mutex beats contorting ownership</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>Websockets</strong> — the natural choice for &ldquo;real-time chat,&rdquo; and precisely
+        wrong here. Websockets need a protocol library to handle the upgrade dance, framing,
+        ping/pong, and close semantics. That machinery would obscure the very thing this project
+        teaches: what a socket connection <em>is</em>, who owns it, and how goroutines coordinate
+        around it. Websocket framing is also binary and buffered, so the newline protocol lesson
+        evaporates.</li>
+    <li><strong>HTTP long-polling / SSE</strong> — would keep you inside <code>net/http</code>'s
+        comfortable abstractions, hiding accept loops, conn ownership, and bidirectional flow.
+        Chat over request/response also forces awkward fakes of what TCP gives you natively:
+        a persistent, ordered, bidirectional byte stream.</li>
+    <li><strong>gRPC</strong> — a fine production technology and entirely the wrong lesson. It
+        would replace hand-rolled fan-out with generated stubs and streaming semantics defined
+        by someone else. The project's point is to build the server-shaped concurrency patterns
+        that gRPC servers use internally, not to consume them.</li>
+    <li><strong><code>sync.RWMutex</code> around shared maps</strong> — the reflexive choice for
+        &ldquo;concurrent map access,&rdquo; rejected in favor of a single hub goroutine that owns both
+        maps outright. See D1: ownership removes the lock <em>and</em> an entire class of bugs.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Connection lifecycle ownership.</strong> With HTTP, the runtime hides the
+        connection; here you own every stage — accept, handshake, register, stream, teardown —
+        and must answer for each: who closes the listener? Who closes each conn? What happens
+        to a reader blocked on a dead peer? The answers (listener closed by Shutdown, writer
+        goroutine is sole closer after registration, closing the conn interrupts everything)
+        form a discipline that transfers to every network server you'll ever write.</li>
+    <li><strong>Channel-ownership patterns.</strong> One hub goroutine owns the client registry
+        and subscriber set; all mutation flows through request channels. There are no mutexes on
+        the hot path because there is no shared mutable state — there is a single owner and a
+        mailbox. This is Go's &ldquo;share memory by communicating&rdquo; maxim made structural rather than
+        slogans.</li>
+    <li><strong>Backpressure by design.</strong> Two different policies, chosen deliberately:
+        readers block on the hub's bounded event queue (fast talkers slow down — backpressure),
+        while writes to slow clients' queues drop the client instead (slow-client isolation).
+        Deciding <em>where</em> to block and where to drop is the core design act of any
+        message system.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>chatwire_test.go</code> — the executable specification. If
+     your implementation passes these tests (including under <code>-race -count=2</code>), it
+     satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Join, roster, and fan-out.</strong> Two clients connect; each sends its
+        name as the first line. Each learns its assigned name (&ldquo;* you are alice&rdquo;), newcomers
+        receive the current roster (&ldquo;* online: …&rdquo;), existing members see join announcements,
+        and messages fan out to every member <em>including the sender</em>.</li>
+    <li><strong>R2 — Duplicate names are uniquified.</strong> A second &ldquo;bob&rdquo; is registered as
+        <code>bob-2</code>; both parties are informed (the newcomer in its welcome, the room
+        via a system event).</li>
+    <li><strong>R3 — Slow-subscriber isolation.</strong> With a subscriber whose buffer holds
+        one event and 100 messages flowing, the hub never stalls: active clients and a roomy
+        (256-capacity) subscriber receive all 100, the starved subscriber receives at most its
+        buffer, <code>Unsubscribe</code> doesn't deadlock afterward, and the hub still delivers
+        the next message.</li>
+    <li><strong>R4 — Graceful shutdown.</strong> Every client gets a &ldquo;* server shutting down,
+        goodbye&rdquo; system line followed by EOF; <code>Serve</code> returns nil;
+        <code>Shutdown</code> returns nil within the caller's context.</li>
+    <li><strong>R5 — Shutdown is idempotent-by-error.</strong> A second <code>Shutdown</code>
+        call returns an error wrapping <code>net.ErrClosed</code> rather than panicking or
+        double-closing channels.</li>
+    <li><strong>R6 — Deadline-bounded shutdown force-closes stragglers.</strong> A client
+        wedged mid-<code>Write</code> (32MB unread backlog) cannot hold <code>Shutdown</code>
+        past its context: past the deadline, remaining conns are force-closed and
+        <code>context.DeadlineExceeded</code> is returned.</li>
+    <li><strong>R7 — Pre-expired context takes the deterministic fast path.</strong> Calling
+        <code>Shutdown</code> with an already-expired context skips the polite wait entirely
+        and immediately force-closes live clients, returning <code>ctx.Err()</code>.</li>
+    <li><strong>R8 — Abrupt clients don't disturb others.</strong> Peers who hang up before
+        the handshake or die mid-handshake cause no panic and no impact on connected clients.</li>
+    <li><strong>R9 — No goroutine leaks across the whole lifecycle.</strong> After joins,
+        traffic, and shutdown plus a settle delay, <code>runtime.NumGoroutine()</code> is back
+        within 5 of baseline.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Bounded resources everywhere.</strong> Per-client write queues cap at 64
+        slots; the hub's inbound queue caps at 256 events; goroutines scale with connections,
+        never with message volume.</li>
+    <li><strong>NF2 — No lock contention on the hot path.</strong> Message routing touches no
+        mutexes; the two mutexes that exist guard the listener state and the live-connection
+        tracking set at their edges.</li>
+    <li><strong>NF3 — Flake-free under load.</strong> The suite passes repeatedly
+        (<code>-count=2</code>) with the race detector on real TCP sockets over loopback;
+        assertions wait on conditions with generous timeouts rather than assuming timing.</li>
+    <li><strong>NF4 — Honest shutdown contract.</strong> Callers can distinguish clean drain
+        (nil) from deadline-forced teardown (<code>ctx.Err()</code>) from misuse (second call
+        → <code>net.ErrClosed</code>).</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: One hub goroutine owns both maps — request channels instead of mutexes</h3>
+  <pre><code><span class="kw">func</span> (s *<span class="typ">Server</span>) <span class="fn">runHub</span>() {
+    clients := <span class="fn">make</span>(<span class="kw">map</span>[<span class="typ">string</span>]*<span class="typ">client</span>)
+    subs := <span class="fn">make</span>(<span class="kw">map</span>[&lt;-<span class="kw">chan</span> <span class="typ">Event</span>]<span class="kw">chan</span> <span class="typ">Event</span>)
+
+    <span class="kw">for</span> {
+        <span class="kw">select</span> {
+        <span class="kw">case</span> &lt;-s.stopCh:
+            s.<span class="fn">finalize</span>(clients, subs)
+            <span class="kw">return</span>
+        <span class="kw">case</span> req := &lt;-s.regCh:
+            s.<span class="fn">register</span>(clients, subs, req)
+        <span class="kw">case</span> c := &lt;-s.unregCh:
+            s.<span class="fn">removeAndAnnounce</span>(clients, subs, c)
+        <span class="kw">case</span> ch := &lt;-s.subAddCh:
+            subs[ch] = ch
+        <span class="kw">case</span> ch := &lt;-s.subDelCh:
+            <span class="fn">delete</span>(subs, ch)
+        <span class="kw">case</span> ev := &lt;-s.eventCh:
+            s.<span class="fn">broadcast</span>(clients, subs, ev)
+        }
+    }
+}</code></pre>
+  <p>This is the architectural heart of the project. Instead of guarding
+     <code>clients</code> and <code>subs</code> with a <code>sync.RWMutex</code> touched by
+     dozens of goroutines, exactly one goroutine owns both maps, and everyone else talks to
+     it through typed request channels. The <code>select</code> loop is the server's event
+     loop: registrations, departures, subscriptions, unsubscribes, and broadcast events all
+     arrive as messages, and the owner applies them serially — serialization is free, it's
+     the loop itself. The payoff compounds downstream: no lock ordering to reason about,
+     nothing to forget to lock, and (critically, see D4) no send-on-closed-channel panic
+     class, because only the owner ever closes the out-channels.</p>
+
+  <h3>D2: Reader-per-connection, writer-per-client, hub in between</h3>
+  <pre><code>conn := ln.<span class="fn">Accept</span>()
+<span class="kw">go</span> s.<span class="fn">handleConn</span>(conn)   <span class="com">// reader: one per connection
+
+// inside register(), once accepted:</span>
+s.wg.<span class="fn">Add</span>(<span class="num">1</span>)
+<span class="kw">go</span> s.<span class="fn">writeLoop</span>(c)       <span class="com">// writer: drains c.out onto the socket</span></code></pre>
+  <p>Traffic splits along the direction it flows. Each connection's <strong>reader</strong>
+     goroutine performs the name handshake, then forwards message lines into the hub's
+     bounded <code>eventCh</code> (blocking there applies backpressure to fast talkers), and
+     finally asks the hub to deregister the client on EOF. Each registered client gets a
+     <strong>writer</strong> goroutine draining its private 64-slot <code>out</code> queue
+     onto the socket. The hub sits between them, moving lines from readers' events to
+     writers' queues. Three rules make the topology safe: the reader never touches the conn
+     once registered; the writer is the <em>sole closer</em> of the connection after
+     registration; and the only channel either side closes is its own. Ownership is total,
+     so races are structurally impossible rather than merely avoided.</p>
+
+  <h3>D3: Drop-on-full vs block-and-wait — two backpressure policies</h3>
+  <pre><code><span class="com">// To a client's write queue: DROP on full — never stall the room</span>
+<span class="kw">select</span> {
+<span class="kw">case</span> c.out &lt;- line:
+<span class="kw">default</span>:   <span class="com">// slow client: evict it</span>
+    <span class="fn">delete</span>(clients, c.name)
+    s.<span class="fn">untrackConn</span>(c.conn)
+    <span class="fn">close</span>(c.out)
+    c.conn.<span class="fn">Close</span>()
+}
+
+<span class="com">// Into the hub's event queue: BLOCK on full — fast talkers slow down</span>
+<span class="kw">select</span> {
+<span class="kw">case</span> s.eventCh &lt;- Event{...}:  <span class="com">// capacity 256</span>
+<span class="kw">case</span> &lt;-s.hubDone:
+}</code></pre>
+  <p>The same problem — a bounded queue is full — gets opposite answers depending on which
+     side of the hub it happens on, and the asymmetry is the lesson. A <strong>slow
+     client</strong> (not reading its socket) has nowhere for its queue to drain; blocking
+     the hub would freeze the entire chat room behind one bad connection, so we drop the
+     client instead: close its queue, kill its conn, let its writer exit. That's slow-client
+     isolation. A <strong>slow talker</strong> filling the hub's inbound queue is different:
+     making them wait is correct, natural backpressure — they'll block in
+     <code>eventCh &lt;-</code> until the hub catches up, and nobody else suffers.
+     Subscribers get the client treatment: non-blocking sends that silently drop events when
+     their buffer is full (slow-subscriber isolation), verified by R3. Choosing per-edge
+     between &ldquo;block&rdquo; and &ldquo;drop&rdquo; is the fundamental design decision in every message
+     broker, log shipper, and metrics pipeline you'll meet.</p>
+
+  <h3>D4: Why single-owner maps beat sync.RWMutex here</h3>
+  <pre><code><span class="typ">client</span> = {name, conn, out}
+<span class="com">// Exactly two owners of `out`: the hub (sends and closes it),
+// the writer (drains it, then closes the conn). Nobody else touches either.</span></code></pre>
+  <p>The mutex-based alternative — an <code>RWMutex</code>, readers taking
+     <code>RLock</code> to iterate clients during broadcast, registrars taking
+     <code>Lock</code> — looks simpler and hides three traps. First, lock ordering: broadcast
+     iterates the registry while eviction during that same iteration wants to modify it;
+     every new code path must be audited against every other. Second, lifecycle races: if a
+     deregistering path closes a client's <code>out</code> channel while a broadcaster holds
+     only a read lock, the broadcaster can send on a closed channel — a panic no mutex
+     placement cleanly fixes. Third, fairness: a slow broadcast under lock stalls
+     registration. The ownership design dissolves all three at once: only the hub closes
+     anything, so send-on-closed is impossible by construction; mutation is serialized
+     inside one loop, so there is no ordering to reason about; and the hub never blocks on a
+     client thanks to D3's drop policy. The mutexes that remain (<code>s.mu</code> for
+     listener state, <code>connsMu</code> for live-connection tracking) guard tiny leaf
+     structures at the API boundary — the right place for locks when ownership can't cover
+     them.</p>
+
+  <h3>D5: Incremental liveConns tracking for deadline force-close</h3>
+  <pre><code><span class="com">// trackConn runs at every registration and removal point, so the set
+// is always current — force-close never sees a stale snapshot.</span>
+<span class="kw">func</span> (s *<span class="typ">Server</span>) <span class="fn">forceCloseConns</span>() {
+    s.connsMu.<span class="fn">Lock</span>()
+    conns := s.liveConns
+    s.liveConns = <span class="fn">make</span>(<span class="kw">map</span>[<span class="typ">net</span>.<span class="typ">Conn</span>]<span class="kw">struct</span>{})
+    s.connsMu.<span class="fn">Unlock</span>()
+    <span class="kw">for</span> cn := <span class="kw">range</span> conns {
+        cn.<span class="fn">Close</span>()  <span class="com">// closing an already-closed conn is a harmless no-op</span>
+    }
+}</code></pre>
+  <p>When <code>Shutdown</code>'s deadline expires, wedged writers must be unblocked by
+     killing their sockets. The naive approach — ask the hub for a list of connections —
+     fails exactly when it matters: the deadline may fire before the hub processes the stop
+     signal, so the &ldquo;snapshot&rdquo; would be stale or unavailable. Instead, every registration,
+     drop, and departure updates <code>liveConns</code> incrementally under a small mutex,
+     so the set is current at all times regardless of hub progress. This is the fix pinned
+     by regression test <code>TestShutdownExpiredContextForceCloses</code>: with a pre-expired
+     context the hub may never reach finalize, yet the victim's socket still closes.
+     Because closing an already-closed <code>net.Conn</code> just returns an error harmlessly,
+     the &ldquo;close everything, twice is fine&rdquo; pattern is safe here.</p>
+
+  <h3>D6: The shutdown sequence</h3>
+  <pre><code>ln.Close()       <span class="com">→ Accept returns net.ErrClosed → Serve returns nil</span>
+close(s.stopCh)  <span class="com">→ hub exits its select loop…</span>
+finalize         <span class="com">→ goodbye line queued per client, then close(c.out)</span>
+                 <span class="com">→ subscriber channels closed → close(s.hubDone)</span>
+writers          <span class="com">→ range c.out ends → drain → conn.Close() → wg.Done()</span>
+doneCh watcher   <span class="com">→ wg.Wait() returns → close(doneCh)</span>
+Shutdown         <span class="com">→ &lt;-doneCh ⇒ return nil | &lt;-ctx.Done() ⇒ forceClose, return ctx.Err()</span></code></pre>
+  <p>Graceful shutdown is choreography, and each arrow above is a synchronization edge some
+     goroutine is waiting on. Closing the listener unblocks <code>Serve</code> first so no
+     new clients arrive mid-teardown. <code>stopCh</code> tells the hub to run finalize,
+     which queues the goodbye and then closes each <code>out</code> channel — the close is
+     what releases every writer's <code>range</code>, letting each drain whatever remains
+     before closing its own conn and calling <code>wg.Done()</code>. A dedicated watcher
+     goroutine turns &ldquo;hub finished <em>and</em> all writers exited&rdquo; into the single
+     <code>doneCh</code> signal <code>Shutdown</code> waits on. And the deadline arms the
+     escape hatch: if politeness takes too long, force-close kills the stragglers and the
+     caller learns via <code>ctx.Err()</code>. One subtlety earns a test of its own (R7): if
+     the context is <em>already expired</em>, Shutdown skips the polite wait entirely —
+     selecting between two ready cases would race — and goes straight to force-close.
+     Polite-first, forced-if-late, immediate-if-doomed: the full contract in three modes.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>net.Listener and net.Conn — owning a connection from birth to death</h3>
+  <pre><code>ln, err := net.<span class="fn">Listen</span>(<span class="str">"tcp"</span>, addr)
+...
+<span class="kw">for</span> {
+    conn, err := ln.<span class="fn">Accept</span>()
+    <span class="kw">if</span> err != <span class="kw">nil</span> {
+        <span class="kw">if</span> errors.<span class="fn">Is</span>(err, net.<span class="typ">ErrClosed</span>) {
+            <span class="kw">return</span> <span class="kw">nil</span>  <span class="com">// Shutdown closed us: a clean stop, not a failure</span>
+        }
+        <span class="kw">return</span> err
+    }
+    <span class="kw">go</span> s.<span class="fn">handleConn</span>(conn)
+}</code></pre>
+  <p>A <code>Listener</code> is a queue of incoming connections; <code>Accept</code> pops one
+     and hands you a <code>Conn</code> — a bidirectional byte pipe implementing
+     <code>io.Reader</code>/<code>io.Writer</code>. Everything interesting is in the error
+     handling and lifecycle. When <code>Shutdown</code> closes the listener, a blocked
+     <code>Accept</code> wakes with an error satisfying
+     <code>errors.Is(err, net.ErrClosed)</code> — distinguishing &ldquo;we're stopping&rdquo; from
+     &ldquo;something broke&rdquo; is what lets Serve return nil on purposeful close. Conns carry
+     deadlines as their universal interrupt: <code>SetReadDeadline</code> bounds the silent
+     handshake window (60 seconds here, so pre-registration conns can't linger forever), and
+     is then cleared with <code>time.Time{}</code> so registered users may idle indefinitely.
+     Most importantly, <code>conn.Close()</code> works from <em>another goroutine</em>: it's
+     how the hub evicts a slow client and how force-close unblocks wedged writers — which is
+     why &ldquo;who owns the right to close&rdquo; must be answered explicitly. Here the answer is:
+     the writer goroutine, alone.</p>
+
+  <h3>select as multiplexer — one goroutine, many conversations</h3>
+  <pre><code><span class="kw">select</span> {
+<span class="kw">case</span> s.eventCh &lt;- ev:   <span class="com">// try to deliver the event...</span>
+<span class="kw">case</span> &lt;-s.hubDone:       <span class="com">// ...unless the server is shutting down</span>
+    <span class="kw">return</span>
+}</code></pre>
+  <p><code>select</code> waits on multiple channel operations and proceeds with whichever is
+     ready — Go's answer to both multiplexing and cancellation. Two uses dominate this
+     codebase. As a <strong>multiplexer</strong>, it powers the hub's event loop (D1): one
+     goroutine services six different request types without threads-per-request. As a
+     <strong>cancellation guard</strong>, nearly every blocking operation is paired with a
+     <code>&lt;-s.hubDone</code> arm: a reader pushing an event, a client trying to register,
+     a <code>Subscribe</code> caller — all can abort cleanly if the hub dies mid-conversation
+     instead of blocking forever on a channel nobody will read again. Add
+     <code>default</code> and select becomes a poll — the try-send that implements
+     drop-on-full in D3. The pattern generalizes: whenever a goroutine might block on a
+     channel, ask &ldquo;what else should I be waiting for?&rdquo; and add that case. A bare blocking
+     send with no escape hatch is how goroutine leaks begin.</p>
+
+  <h3>Slow-client vs slow-subscriber — isolating failure domains</h3>
+  <div class="callout">
+    <p><strong>The rule:</strong> a component's failure may cost <em>itself</em>, never the
+       system. Decide per consumer whether lag means &ldquo;drop my data&rdquo; or &ldquo;evict me&rdquo; — but
+       never &ldquo;freeze everyone.&rdquo;</p>
+  </div>
+  <p>Both isolation mechanisms exist to protect the hub's progress guarantee — it never
+     waits on a consumer — but they differ in consequence and clientele. A <strong>slow
+     subscriber</strong> is an in-process observer (tests, metrics hooks): its buffered
+     channel simply misses events when full. Cheap, silent, lossy — appropriate when
+     observations are advisory. A <strong>slow client</strong> is a remote peer whose socket
+     has stopped draining: buffering can't save it, so the server severs the relationship —
+     queue closed, conn closed, room notified of the departure. Between them sits the
+     <strong>fast talker</strong> case, handled by blocking instead: a client flooding
+     <code>eventCh</code> waits for the hub, converting excess enthusiasm into latency rather
+     than loss. Three consumer archetypes, three policies, one invariant throughout: the hub
+     advances. Any architecture where one consumer's pace dictates the system's throughput
+     has already lost at scale.</p>
+
+  <h3>Graceful shutdown patterns — drain politely, force under deadline</h3>
+  <pre><code><span class="kw">if</span> err := ctx.<span class="fn">Err</span>(); err != <span class="kw">nil</span> {
+    <span class="com">// Deterministic fast path for an already-expired context:</span>
+    <span class="com">// skip the polite wait instead of racing two ready cases.</span>
+    s.<span class="fn">forceCloseConns</span>()
+    <span class="kw">return</span> err
+}
+<span class="kw">select</span> {
+<span class="kw">case</span> &lt;-s.doneCh:    <span class="com">// hub finished AND every writer drained</span>
+    <span class="kw">return</span> <span class="kw">nil</span>
+<span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>():   <span class="com">// patience ran out</span>
+    s.<span class="fn">forceCloseConns</span>()
+    <span class="kw">return</span> ctx.<span class="fn">Err</span>()
+}</code></pre>
+  <p>Production servers face a shutdown trilemma: lose in-flight work, hang forever, or
+     bound the wait and accept partial teardown. The standard resolution — graceful with a
+     deadline — needs four ingredients, all present here: a <em>stop signal</em>
+     (<code>stopCh</code>) that initiates drain; a <em>join barrier</em>
+     (<code>wg.Wait()</code> inside the doneCh watcher) proving workers finished; a
+     <em>deadline</em> from the caller's context; and an <em>escape hatch</em>
+     (force-close) that converts &ldquo;wedged&rdquo; into &ldquo;closed.&rdquo; The check of
+     <code>ctx.Err()</code> before entering the select handles the fourth mode most
+     implementations miss: a pre-expired context means both select arms are instantly ready,
+     and which wins is scheduler roulette — so the code checks first and forces
+     deterministically. Note also what Shutdown does <em>not</em> do: it never closes client
+     channels directly. It signals the hub, and the hub — the sole owner — performs every
+     close. Delegation to the owner keeps the no-double-close invariant intact even under
+     repeated Shutdown calls (the second caller gets <code>net.ErrClosed</code>, guarded by
+     <code>s.closed</code>).</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Real TCP on ephemeral ports</h3>
+  <p>Nothing is mocked. Tests bind <code>127.0.0.1:0</code> to reserve a free port, dial real
+     connections through the loopback stack, and speak the actual wire protocol with
+     <code>bufio</code> readers — exercising accept loops, deadlines, kernel buffering, and
+     half-open connections exactly as production would. Helpers enforce hygiene throughout:
+     <code>startServer</code> registers cleanup that shuts down and asserts
+     <code>Serve</code> returned cleanly; <code>awaitListener</code> polls until the server
+     accepts (its probe conns deliberately hang up before handshake, doubling as
+     abrupt-client fodder); every dial, read, and write carries explicit deadlines so a
+     broken server fails a test in seconds instead of hanging CI. Reading is done via
+     <code>readUntil(substr)</code> — consume lines until the expected one appears — which
+     tolerates interleaved broadcasts rather than assuming message order across clients.</p>
+
+  <h3>The slow-subscriber proof</h3>
+  <pre><code>slow := s.<span class="fn">Subscribe</span>(<span class="num">1</span>)    <span class="com">// capacity 1 — starved by design</span>
+fast := s.<span class="fn">Subscribe</span>(<span class="num">256</span>)  <span class="com">// roomy — must stay complete</span>
+
+<span class="kw">for</span> i := <span class="num">0</span>; i &lt; total; i++ { gen.<span class="fn">send</span>(t, strconv.<span class="fn">Itoa</span>(i)) }
+
+waitFor(t, <span class="str">"echo client completeness"</span>,
+    <span class="kw">func</span>() bool { <span class="kw">return</span> echoCount() &gt;= total })
+...
+<span class="kw">if</span> dropped &gt; <span class="num">1</span> {
+    t.<span class="fn">Fatalf</span>(<span class="str">"slow sub delivered %d events with capacity 1"</span>, dropped)
+}</code></pre>
+  <p><code>TestSlowSubscriberIsolation</code> stages the adversarial scenario directly: one
+     subscriber with capacity 1 against 100 rapid-fire messages, alongside clients and a fat
+     subscriber who must receive <em>all</em> of them. Assertions verify both sides of the
+     contract: completeness for healthy consumers, starvation for the sick one (at most its
+     single buffered event retrievable without blocking), no deadlock on the subsequent
+     <code>Unsubscribe</code>, and hub liveness afterward (one more message still lands).
+     The counting helper reads occupancy via <code>len(ch)</code> without consuming —
+     measuring without perturbing the drop semantics under test. Every wait goes through
+     <code>waitFor</code>, polling a condition against a 10-second ceiling: conditions, not
+     sleeps, are what make this suite flake-proof.</p>
+
+  <h3>Abrupt-client resilience</h3>
+  <p><code>TestAbruptClientsDoNotDisturbOthers</code> attacks the handshake path from both
+     ends: a ghost who connects and immediately hangs up (EOF before any name line), and a
+     partial who writes half a name with no newline before dying. Both must be absorbed
+     silently by the reader goroutine — close the conn, exit, disturb no one — while a
+     steady connected client continues exchanging messages normally across a settle window.
+     The same robustness shows up in <code>awaitListener</code>'s probe conns: in a real
+     deployment, port-scanners and health checks behave exactly like these ghosts, and a
+     chat server that panics or wedges on them fails within seconds of facing the internet.</p>
+
+  <h3>Goroutine-leak deltas over the whole lifecycle</h3>
+  <pre><code>time.<span class="fn">Sleep</span>(settle)               <span class="com">// let earlier tests finish reaping</span>
+base := runtime.<span class="fn">NumGoroutine</span>()
+
+<span class="com">// ...3 concurrent users join, chat, then Shutdown...</span>
+
+time.<span class="fn">Sleep</span>(<span class="num">2</span> * settle)
+<span class="kw">if</span> delta := runtime.<span class="fn">NumGoroutine</span>() - base; delta &gt; tolerance {
+    t.<span class="fn">Fatalf</span>(<span class="str">"goroutine leak: delta %d &gt; %d"</span>, delta, tolerance)
+}</code></pre>
+  <p>A chat server spawns goroutines per connection and per writer — precisely the shape
+     where leaks hide, because each individual leak looks tiny. The leak test runs the
+     <em>entire</em> lifecycle (joins, traffic, shutdown) and asserts the population returns
+     within 5 of baseline after settle time. This catches all four classic leaks at once: a
+     reader blocked forever on a dead conn, a writer whose out-channel was never closed, the
+     hub failing to exit, and the doneCh watcher stranded by a missed
+     <code>wg.Done()</code>. The generous tolerance acknowledges background noise from the
+     test framework itself; what matters is trend, and a monotonic upward trend across a
+     full lifecycle is never benign.</p>
+
+  <h3>The -count=2 -race flake protocol</h3>
+  <pre><code>go test -race -count=2 ./projects/06-chatwire/...</code></pre>
+  <p>Concurrency bugs are probabilistic, so proving their absence requires repetition:
+     <code>-count=2</code> runs the suite twice in one process, multiplying exposure to
+     interleaving luck, and <code>-race</code> instruments every memory access to catch races
+     that didn't happen to corrupt anything this run — especially valuable here because the
+     tests exercise genuinely concurrent paths (concurrent dials, a reader racing shutdown,
+     subscribers filling while broadcasts run). A suite that passes once but flakes on
+     repetition trains people to rerun instead of investigate. Every assertion in this suite
+     was designed under this protocol: primary proofs count events or check identities,
+     timing bounds appear only as generously-bounded backstops (the 3-second cap on a
+     200ms-deadline Shutdown leaves 15× headroom), and helpers poll conditions rather than
+     sleeping fixed durations. Run the protocol before declaring victory.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>Raw TCP listeners, reader-per-connection goroutines, single-owner state machines, and
+       deadline-bounded shutdown aren't teaching toys — they're the working skeleton of
+       serious infrastructure written in Go:</p>
+    <ul>
+      <li><strong>CockroachDB's pgwire</strong> — the layer where every PostgreSQL driver
+          connects. Each client connection gets its own goroutine reading the Postgres wire
+          protocol off a raw <code>net.Conn</code>, exactly like chatwire's readers; context
+          cancellation closes conns to unblock query execution, the same force-close move
+          this project's shutdown uses.</li>
+      <li><strong>HashiCorp serf / memberlist</strong> — cluster membership and gossip used by
+          Consul and Nomad. Memberlist speaks a custom binary protocol directly over TCP and
+          UDP sockets, manages per-node connections with explicit handshakes and timeouts,
+          and shut down via coordinated channels — a chat room where the members are servers
+          and the messages are liveness gossip.</li>
+      <li><strong>etcd's raft RPC layers</strong> — etcd serves raft consensus messages over
+          plain streaming TCP between peers, with dedicated send/receive goroutines per peer
+          connection and careful ownership so only one goroutine writes each stream —
+          chatwire's reader/writer split at production stakes.</li>
+      <li><strong>IRC servers</strong> — chatwire's wire format (newline-delimited text, a
+          name handshake, broadcast with system lines prefixed <code>*</code>) is a stripped-
+          down descendant of IRC, which has run the internet's chat since 1988 on exactly
+          this shape of protocol.</li>
+    </ul>
+  </div>
+
+  <h3>Why Go owns the network-server niche</h3>
+  <ol>
+    <li><strong>Goroutines make connection-per-goroutine affordable.</strong> Classic servers
+        needed epoll or thread pools because threads cost megabytes; a goroutine costs a few
+        kilobytes. That collapses the design space: the obvious program — one reader per
+        connection, blocking reads, straight-line logic — is also the scalable one. Ten
+        thousand connections is ten thousand cheap goroutines, not a callback maze.</li>
+    <li><strong>Channels make ownership composable.</strong> The hub-owns-the-maps pattern you
+        built here scales up unchanged: a single owner plus request channels is how Go's own
+        <code>net/http</code> manages connection state machines, and how production message
+        systems partition ownership. When there's exactly one writer of a piece of state, the
+        race detector stays quiet and reviews get shorter.</li>
+    <li><strong>Newline-delimited text remains a great first protocol.</strong> Redis speaks
+        it (RESP is newline-framed), syslog ships billions of lines a day framed by
+        newlines, JSON Lines powers most data pipelines, and InfluxDB's line protocol put it
+        in the name. It's debuggable with <code>nc</code>, trivially parseable, streaming-
+        friendly, and — as chatwire proves — implementable in five lines of
+        <code>bufio</code>. Start simple; upgrade to length-prefixed framing only when you
+        need binary payloads.</li>
+  </ol>
+  <p>The through-line: accept loop, reader goroutines, an owning hub, bounded queues with
+     deliberate backpressure, and shutdown choreography under a deadline — that's not a
+     classroom exercise. It's the load-bearing structure of databases, cluster managers, and
+     consensus systems, exercised here in ~450 lines with the race detector keeping score.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="05-gopherfetch.html">&larr; Previous: gopherfetch</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 06 of 16</span>
+  <a class="btn" href="07-shorty.html">Next: shorty &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
