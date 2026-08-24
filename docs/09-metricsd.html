@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 09 — metricsd</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+
+    /* Ring-buffer wrap indicator: a slow rotating dashed border on callouts */
+    @keyframes callout-breathe {
+      0%, 100% { border-left-color: rgba(210,153,34,0.6); }
+      50%      { border-left-color: rgba(210,153,34,1.0); }
+    }
+    .callout { animation: callout-breathe 3s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>metricsd</h1>
+  <p class="subtitle">Go101 · Project 09 — a lock-free metrics collector and scraper daemon</p>
+  <div class="badge-row">
+    <span class="badge tier">Intermediate Tier</span>
+    <span class="badge">sync/atomic</span>
+    <span class="badge">CAS loops</span>
+    <span class="badge">Ring buffers</span>
+    <span class="badge">time.Ticker loops</span>
+    <span class="badge">context</span>
+    <span class="badge">net/http</span>
+    <span class="badge">Prometheus text format</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: sync/atomic + net/http + encoding/json, zero dependencies</h3>
+  <p>metricsd is built from three corners of the standard library:
+     <code>sync/atomic</code> for lock-free counters, gauges, and histogram sums;
+     <code>net/http</code> both to poll targets (<code>http.Client</code>) and to serve
+     the exposition endpoint (<code>ServeMux</code>, including Go&nbsp;1.22's
+     <code>/history/{name}</code> path wildcards); and <code>encoding/json</code> to parse
+     scraped values out of target payloads. No client library, no storage engine, no
+     <code>go.sum</code>. Where project 08 proved generics make broker APIs type-safe,
+     project 09 asks a sharper question this stack answers uniquely: <strong>when is an
+     atomic operation better than a mutex?</strong> Every metric type in this project gives
+     a different answer.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in metricsd</th><th>What it teaches</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>sync/atomic</code></td><td><code>atomic.Int64</code> counters, <code>atomic.Pointer[float64]</code> gauges, <code>atomic.Uint64</code>-as-float-bits histogram sums with a CAS loop</td><td>The full decision tree: plain add, pointer swap, and read-modify-write via CompareAndSwap — three different atomic shapes for three different write patterns</td></tr>
+      <tr><td><code>net/http</code></td><td><code>http.Client</code> polling with request-scoped contexts; <code>ServeMux</code> serving <code>GET /metrics</code> and <code>GET /history/{name}</code></td><td>Go as both HTTP client and server; path wildcards; <code>NewRequestWithContext</code> so cancellation propagates into in-flight scrapes</td></tr>
+      <tr><td><code>encoding/json</code></td><td>Dotted-path extraction of one numeric leaf from each target's JSON payload; encoding <code>[]Point</code> history as JSON</td><td><code>dec.UseNumber()</code> to avoid float64 precision surprises, type-switching over decoded <code>any</code>, round-tripping structs</td></tr>
+      <tr><td><code>context + time</code></td><td>Cancellable scrape loop driven by <code>time.NewTicker</code>, torn down by <code>Scraper.Stop</code></td><td>The canonical ctx+ticker+WaitGroup loop shape that underpins nearly every Go daemon</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong><code>prometheus/client_golang</code></strong> — the obvious choice and the whole
+        reason not to use it: the point of this project is building the exposition format by
+        hand once. Emitting <code>name_bucket{le="0.5"} 3</code> yourself teaches you what
+        cumulative buckets, the implicit <code>+Inf</code> bucket, and <code>_sum</code>/<code>_count</code>
+        lines actually <em>are</em>. After this project, the official library's types are
+        documentation instead of magic — you know precisely what its histograms do on every
+        <code>Observe</code>.</li>
+    <li><strong>Full TSDB-style storage</strong> — appending samples to disk with chunk files,
+        compaction, index structures. Rejected because the lesson is the memory/time tradeoff,
+        which a ring buffer makes vivid: 64 slots per target is ~1 hour of history at a 1-minute
+        interval, allocated once, never growing, oldest data silently overwritten. A real TSDB
+        buys unlimited history at the cost of exactly the complexity (persistence, retention
+        policies, compaction) that would bury the concurrency lessons this project exists for.</li>
+    <li><strong>Mutex-guarded counters everywhere</strong> — the naive implementation would put
+        a single <code>sync.Mutex</code> around all metric writes. It would pass the tests, but
+        it serializes every <code>Inc</code> across every goroutine in the process, and it skips
+        the actual learning: choosing between atomics and locks per access pattern. This
+        rejection is the project's thesis, not an optimization footnote.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Atomic-vs-mutex decision-making as a first-class skill.</strong> Counters use a
+        plain <code>atomic.Add</code> (no read-modify-write dependency beyond the add itself).
+        Gauges use a pointer swap (last-write-wins needs no CAS). Histogram sums need a full
+        CAS loop (float addition must read before writing). And ring buffers deliberately go
+        back to a mutex — because the single-writer pattern makes the mutex free. Four cases,
+        four different correct answers, all in one file.</li>
+    <li><strong>Ring buffers as bounded memory.</strong> Fixed capacity, O(1) append,
+        automatic eviction of the oldest sample by overwrite. The wrap-around math —
+        <code>(next - n + size) % size</code> — is small enough to verify by hand but general
+        enough to appear unchanged in audio processing, network windows, and log rings.</li>
+    <li><strong>Exposition endpoints accept approximation.</strong> The snapshot loop documents
+        that its output can be a torn read across metric lines — and explains why that's
+        acceptable for scraping. Learning where linearizability is <em>required</em> versus
+        merely nice is half of practical concurrent design.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>metricsd_test.go</code> — the executable specification. If your
+     implementation passes these tests (including under <code>-race</code>), it satisfies the
+     requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Counter increments are exact under concurrency.</strong> Sixteen goroutines
+        each incrementing a counter 1,000 times yield exactly 16,000 — no lost updates. Plain
+        adds accumulate too (<code>Add(name, 1024)</code> then <code>Add(name, 2048)</code>
+        reads 3072).</li>
+    <li><strong>R2 — Gauges are last-write-wins with no torn values.</strong> Thirty-two
+        goroutines set a gauge simultaneously after a start-gun; the observed value must equal
+        one of the written values exactly — never a mix, never missing.</li>
+    <li><strong>R3 — Histogram bucketing follows the table.</strong> With bounds
+        <code>[0.5, 1, 4]</code>: observations land in the first bound ≥ the value; buckets are
+        cumulative; values above every bound fall only into <code>+Inf</code>; and
+        <code>_count</code> equals total observations while <code>_sum</code> accumulates
+        exactly (0.25 + 0.75 + 2.5 = 3.5).</li>
+    <li><strong>R4 — Bucket bounds are locked at first use.</strong> A later
+        <code>Observe</code> for the same name with different bounds is ignored entirely: the
+        snapshot must be byte-identical afterward — neither the new value nor alternative
+        bucket lines may appear.</li>
+    <li><strong>R5 — Snapshot format is golden-exact.</strong> Counters render first (sorted),
+        then gauges (sorted), then histograms with cumulative
+        <code>_bucket{le="..."}</code> lines, trailing <code>{le="+Inf"}</code>,
+        <code>_sum</code>, and <code>_count</code> — byte-for-byte against the expected text.
+        An empty collector renders zero bytes.</li>
+    <li><strong>R6 — The scraper parses JSON paths and accounts errors.</strong> Against an
+        httptest server: target <code>pool</code> serving
+        <code>{"workers":{"active":7}}</code> with path <code>workers.active</code> produces
+        points with Value 7 and non-zero timestamps in its ring, plus gauge
+        <code>pool_last 7</code>. Target <code>flaky</code> hitting a 500 increments
+        <code>flaky_errors</code>, sets no gauge, and writes nothing to its buffer.</li>
+    <li><strong>R7 — Immediate first tick, then interval discipline.</strong> Start scrapes
+        immediately (no waiting one interval), subsequent ticks honor the interval; a
+        250 ms run at a 10 ms interval records between 15 and 30 ticks.</li>
+    <li><strong>R8 — Stop is idempotent and deadlock-free.</strong> Two consecutive Stop calls
+        complete promptly; History remains safe to call after Stop.</li>
+    <li><strong>R9 — Handler serves both endpoints.</strong> <code>GET /metrics</code> returns
+        the exposition text (counter lines and scraped gauges present);
+        <code>GET /history/{name}</code> returns the ring as a JSON array of Points; unknown
+        names return an empty array with status 200.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Lock-free record hot paths.</strong> Once a metric name exists,
+        <code>Inc</code>/<code>Add</code>/<code>SetGauge</code>/<code>Observe</code> never
+        acquire the collector lock again — only atomics.</li>
+    <li><strong>NF2 — Clean under <code>-race</code>.</strong> All concurrency proofs pass the
+        race detector; the scraper's goroutines (loop + per-target fetches) synchronize
+        exclusively through the documented locks and atomics.</li>
+    <li><strong>NF3 — Bounded memory forever.</strong> Each target retains at most
+        <code>ringSize</code> (64) samples regardless of runtime or tick count; snapshots are
+        fresh copies, never aliases into the ring.</li>
+    <li><strong>NF4 — Cancellation propagates.</strong> Stopping the scraper cancels in-flight
+        HTTP requests via their contexts; no goroutine outlives <code>Stop</code>.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Double-checked locking for metric creation</h3>
+  <pre><code>c.mu.<span class="fn">RLock</span>()
+ctr, ok := c.counters[name]
+c.mu.<span class="fn">RUnlock</span>()
+<span class="kw">if</span> ok {
+    ctr.<span class="fn">Add</span>(v)   <span class="com">// hot path: one RLock'd map probe, then pure atomic</span>
+    <span class="kw">return</span>
+}
+
+c.mu.<span class="fn">Lock</span>()
+<span class="kw">defer</span> c.mu.<span class="fn">Unlock</span>()
+<span class="kw">if</span> ctr, ok = c.counters[name]; !ok { <span class="com">// lost the creation race</span>
+    ctr = <span class="fn">new</span>(<span class="typ">atomic.Int64</span>)
+    c.counters[name] = ctr
+}
+ctr.<span class="fn">Add</span>(v)</code></pre>
+  <p>The cost structure of a metrics library is lopsided: any given name is created exactly
+     once but incremented millions of times. So the lock is only for registration. The fast
+     path takes an <code>RLock</code>, probes the map, and — if found — drops straight to a
+     single atomic add; multiple incrementers share the read lock without contending. Only a
+     cache miss escalates to the write lock, and the second check inside it handles the race
+     of two goroutines registering the same name simultaneously: the loser reuses the winner's
+     counter rather than clobbering accumulated counts. Gauges and histograms repeat the same
+     pattern. This is the classic double-checked idiom, and it works here because map reads
+     under RLock establish the happens-before edge that makes the published
+     <code>atomic.Int64</code> safe to touch lock-free afterward.</p>
+
+  <h3>D2: Per-target ring mutex, justified by the single-writer guarantee</h3>
+  <pre><code><span class="kw">func</span> (r *<span class="typ">ring</span>) <span class="fn">add</span>(p <span class="typ">Point</span>) {
+    r.mu.<span class="fn">Lock</span>()
+    <span class="kw">defer</span> r.mu.<span class="fn">Unlock</span>()
+    r.buf[r.next] = p
+    r.next = (r.next + <span class="num">1</span>) % ringSize
+    <span class="kw">if</span> r.n &lt; ringSize {
+        r.n++
+    }
+}</code></pre>
+  <p>A reviewer's instinct says "you just taught us atomics — why a mutex here?" The answer is
+     in the package comment, deliberately: exactly one goroutine ever writes a given ring (the
+     scrape loop's per-target fetch goroutine), and <code>History</code> reads are rare. An
+     effectively uncontended mutex costs nanoseconds and — crucially — removes every
+     memory-ordering subtlety of a hand-rolled atomic write index paired with a valid-count.
+     Getting <code>next</code> and <code>n</code> coherent across two separate atomics without
+     a lock is exactly the kind of puzzle whose solution is subtle enough to be wrong in ways
+     <code>-race</code> can't even see. Choosing the dumb-but-obviously-correct tool when
+     contention is provably absent is the senior move; knowing <em>why</em> it's provably
+     absent is the lesson.</p>
+
+  <h3>D3: The scrape loop — ctx + ticker + inner WaitGroup, immediate first tick</h3>
+  <pre><code>s.wg.<span class="fn">Add</span>(<span class="num">1</span>)
+<span class="kw">go func</span>() {
+    <span class="kw">defer</span> s.wg.<span class="fn">Done</span>()
+    ticker := time.<span class="fn">NewTicker</span>(interval)
+    <span class="kw">defer</span> ticker.<span class="fn">Stop</span>()
+
+    s.<span class="fn">scrapeAll</span>(ctx, tg)          <span class="com">// immediate first tick</span>
+    <span class="kw">for</span> {
+        <span class="kw">select</span> {
+        <span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>():
+            <span class="kw">return</span>
+        <span class="kw">case</span> &lt;-ticker.C:
+            s.<span class="fn">scrapeAll</span>(ctx, tg)
+        }
+    }
+}()</code></pre>
+  <p>This is the canonical Go background-loop shape, assembled from parts each earning their
+     place. The <code>WaitGroup</code> lets <code>Stop</code> block until the loop has fully
+     exited — shutdown means "done," not "signaled." The ticker fires before the select loop
+     starts, so callers get data immediately instead of waiting a full interval (the tests rely
+     on this). The inner <code>scrapeAll</code> spawns one goroutine per target and waits for
+     them all with its own <code>WaitGroup</code> — a slow target delays its own tick, not
+     other targets, and the fan-out bound is simply <code>len(targets)</code>, so no worker
+     pool machinery is needed. Every HTTP request carries the loop's context, so
+     <code>Stop</code>'s cancel reaches into any in-flight fetch. Two lifecycle rules are
+     documented on the API itself: calling <code>Start</code> twice is undefined, and
+     <code>Stop</code> must happen-after <code>Start</code> — the <code>cancel</code> field is
+     unsynchronized by design, written only in Start and read only in Stop, which is sound
+     precisely because of that documented ordering.</p>
+
+  <h3>D4: Handler — one mux, two routes, wired to the two subsystems</h3>
+  <pre><code>mux := http.<span class="fn">NewServeMux</span>()
+mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /metrics"</span>, <span class="kw">func</span>(w http.<span class="typ">ResponseWriter</span>, _ *http.<span class="typ">Request</span>) {
+    w.<span class="fn">Header</span>().<span class="fn">Set</span>(<span class="str">"Content-Type"</span>, <span class="str">"text/plain; version=0.0.4"</span>)
+    <span class="kw">if</span> err := c.<span class="fn">Snapshot</span>(w); err != <span class="kw">nil</span> {
+        http.<span class="fn">Error</span>(w, <span class="str">"snapshot failed"</span>, http.<span class="typ">StatusInternalServerError</span>)
+    }
+})
+mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /history/{name}"</span>, <span class="kw">func</span>(w http.<span class="typ">ResponseWriter</span>, r *http.<span class="typ">Request</span>) {
+    w.<span class="fn">Header</span>().<span class="fn">Set</span>(<span class="str">"Content-Type"</span>, <span class="str">"application/json"</span>)
+    _ = json.<span class="fn">NewEncoder</span>(w).<span class="fn">Encode</span>(s.<span class="fn">History</span>(r.<span class="fn">PathValue</span>(<span class="str">"name"</span>)))
+})</code></pre>
+  <p><code>Handler(c, s)</code> composes both halves of the daemon behind one
+     <code>http.Handler</code>: the collector's exposition text and the scraper's ring
+     history. Note the Go 1.22 features doing quiet work — the method-prefixed patterns
+     reject non-GET requests automatically, and <code>r.PathValue("name")</code> extracts the
+     wildcard without a manual string split. The <code>/metrics</code> route propagates
+     Snapshot's writer errors into a real 500 rather than serving truncated output with a
+     200; <code>/history</code> encodes directly to the response writer, streaming. One known
+     limitation is deliberate and worth stating honestly: metric names are written verbatim
+     into the exposition output with no validation — a caller passing a name with spaces or
+     newlines could produce malformed format. Production libraries validate; this project
+     trusts its caller and spends the budget on the concurrency lessons instead.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Three atomic shapes — and when atomics are NOT enough</h3>
+  <pre><code><span class="com">// Counter: plain atomic add — the RMW is the whole operation</span>
+ctr.<span class="fn">Add</span>(v)
+
+<span class="com">// Gauge: last-write-wins needs no CAS — writers don't read</span>
+g.<span class="fn">Store</span>(p)
+
+<span class="com">// Histogram sum: float add MUST read-modify-write atomically</span>
+<span class="kw">for</span> {
+    old := h.sumBits.<span class="fn">Load</span>()
+    newSum := math.<span class="fn">Float64frombits</span>(old) + v
+    <span class="kw">if</span> h.sumBits.<span class="fn">CompareAndSwap</span>(old, math.<span class="fn">Float64bits</span>(newSum)) {
+        <span class="kw">return</span>
+    }
+}</code></pre>
+  <div class="callout">
+    <p><strong>The rule:</strong> pick the weakest primitive that covers your write pattern.
+       Pure accumulation → <code>Add</code>. Overwrite-without-reading → <code>Store</code>.
+       Anything that must read, compute, and write as one indivisible step → CAS loop.</p>
+  </div>
+  <p>The histogram sum is where the lesson bites. Float64 has no native atomic add, so the
+     trick is storing the value's <em>bits</em> in an <code>atomic.Uint64</code>. Why not just
+     load-and-store like the gauge? Because addition is read-modify-write: if two goroutines
+     both load 3.5, both compute +0.5, and both store 4.0, one update vanishes — the exact
+     lost-update bug the counter test proves impossible for <code>Add</code>.
+     <code>CompareAndSwap</code> closes the window: the store succeeds only if the bits still
+     hold the value we read; on failure, someone else moved the world, so we retry with their
+     number. Also note the gauge design: <code>SetGauge</code> heap-allocates a fresh
+     <code>*float64</code> per call and swaps the pointer — readers loading the pointer see
+     either the complete old value or the complete new one, never a torn half-written float.</p>
+
+  <h3>Eventually-consistent snapshots — the torn read you choose on purpose</h3>
+  <pre><code>histos := <span class="fn">make</span>(<span class="kw">map</span>[<span class="typ">string</span>]*<span class="typ">histogram</span>, len(c.histos))
+<span class="kw">for</span> n, h := <span class="kw">range</span> c.histos {
+    <span class="com">// Counts and sums stay readable after RUnlock because each is</span>
+    <span class="com">// individually atomic. Accepted tradeoff: a snapshot is</span>
+    <span class="com">// eventually-consistent, not linearizable...</span>
+    histos[n] = h
+}
+c.mu.<span class="fn">RUnlock</span>()   <span class="com">// ...then reads buckets/sums outside the lock</span></code></pre>
+  <p>Snapshot copies counters and gauges inside the RLock, but for histograms it copies only
+     the <em>pointers</em> and reads bucket counts afterward, unlocked. That means one scrape
+     can contain a counter read at instant T1 and a histogram bucket updated at T2 — lines in
+     one response reflecting different moments of reality. This is a documented, deliberate
+     tradeoff, spelled out in the source comment. The reasoning: Prometheus treats every scrape
+     as a point-in-time sample of an approximation anyway; making the snapshot linearizable
+     would force every <code>Observe</code> to contend on the same lock, converting the entire
+     write path from lock-free back to serialized — destroying the project's core property to
+     buy a coherence guarantee nobody downstream consumes. Knowing <em>where</em> consistency
+      boundaries can safely blur is as valuable as knowing how to enforce them.</p>
+
+  <h3>Ring buffer wrap-around math</h3>
+  <pre><code><span class="com">// Append: overwrite slot, advance, cap the count</span>
+r.buf[r.next] = p
+r.next = (r.next + <span class="num">1</span>) % ringSize
+
+<span class="com">// Read: oldest sample lives at (next - n) mod size,</span>
+<span class="com">// possibly straddling the end of the array</span>
+start := (r.next - r.n + ringSize) % ringSize
+copy(out, r.buf[start:])
+<span class="kw">if</span> start+r.n &gt; ringSize {
+    copy(out[ringSize-start:], r.buf[:r.n-(ringSize-start)])
+}</code></pre>
+  <p>A ring is just an array plus the invariant "<code>n</code> valid samples ending just
+     before <code>next</code>." While filling, <code>next</code> walks forward and <code>n</code>
+     grows; once full, appends stomp the oldest slot and <code>n</code> pins at 64 — eviction
+     by overwrite, no shifting, no allocation. Reading is the fiddly direction: the logical
+     sequence wraps physically, so the copy splits at the array boundary (the modulo dance in
+     <code>(next - n + size) % size</code> keeps the subtraction non-negative). Snapshot
+     returns a freshly built slice rather than the internal array — callers can hold it
+     forever without pinning or racing the ring. Verify the math with a pencil on a 4-slot
+     example once; it will never feel opaque again.</p>
+
+  <h3>Anatomy of the Prometheus text format</h3>
+  <pre><code>bytes_in 2048                          <span class="com"># counter: bare name + integer</span>
+queue_depth 3.5                        <span class="com"># gauge: name + float</span>
+latency_bucket{le="0.5"} 1             <span class="com"># ≤ 0.5ms: 1 observation</span>
+latency_bucket{le="1"} 2               <span class="com"># ≤ 1ms: 2 (cumulative!)</span>
+latency_bucket{le="4"} 3               <span class="com"># ≤ 4ms: 3</span>
+latency_bucket{le="+Inf"} 3            <span class="com"># everything, always == _count</span>
+latency_sum 3.5                        <span class="com"># sum of observed values</span>
+latency_count 3                        <span class="com"># number of observations</span></code></pre>
+  <p>The format is line-oriented: <code>name value</code>, optionally with
+     <code>{label="value"}</code> labels. The subtle parts are the histogram conventions.
+     Buckets are <strong>cumulative</strong> — each <code>le</code> ("less than or equal")
+     line counts all observations up to that bound, which is why the rendering loop accumulates
+     as it goes rather than emitting raw per-bucket counts. The final
+     <code>{le="+Inf"}</code> bucket catches everything above the highest configured bound and,
+     by construction, always equals <code>_count</code>. Downstream systems derive quantiles
+     from bucket deltas, which is why the golden test pins the cumulative layout byte-for-byte:
+     emit raw counts there and every percentile your users compute becomes quietly wrong.
+     Content type <code>text/plain; version=0.0.4</code> is the ecosystem's handshake saying
+     "this body parses as Prometheus exposition."</p>
+
+  <h3>Tick discipline without flakes</h3>
+  <p>A ticker guarantees <em>at least</em> interval spacing, never exactly N ticks in T wall
+     seconds — scheduler pauses, GC, and slow targets all eat into the budget. So the timing
+     test asserts a generous band: ~250 ms at a 10 ms interval must produce between 15 and 30
+     ticks. The lower bound catches real bugs (a loop that waits an extra interval, a scrape
+     that blocks the next tick); the upper headroom keeps CI honest on loaded machines. The
+     deeper design choice feeding it: <code>scrapeAll</code> completes fully before the next
+     ticker fire is processed, so ticks never overlap themselves — a hung target stretches the
+     effective period rather than stacking unbounded goroutine generations. Time-based tests
+     fail by being too tight far more often than by being too loose; the band exists so the
+     test fails only when the code is actually wrong.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>The 16,000-counter concurrency proof</h3>
+  <pre><code><span class="kw">const</span> goroutines, perG = <span class="num">16</span>, <span class="num">1000</span>
+<span class="com">// ...16 goroutines × 1000 × c.Inc("requests")...</span>
+got := snapshotMap(t, c)[<span class="str">"requests"</span>]
+<span class="kw">if</span> got != strconv.<span class="fn">Itoa</span>(goroutines*perG) {
+    t.<span class="fn">Fatalf</span>(<span class="str">"counter total = %s, want %d (lost updates = not atomic)"</span>, ...)
+}</code></pre>
+  <p>This is the lock-free property rendered as arithmetic: with a naive
+     <code>count++</code> on shared memory, 16,000 concurrent increments deterministically lose
+     updates (load/store races drop some entirely), so the test fails loudly and names the
+     disease in the message. With a genuine <code>atomic.Int64</code>, the total is exact every
+     run — and under <code>-race</code>, any unsynchronized shortcut in your implementation is
+     flagged independently. The companion gauge test attacks the opposite failure mode: 32
+     racers setting one value, asserting the result is <em>one of the written values</em>. It
+     can't assert which (that's genuinely nondeterministic) but it catches torn or vanished
+     writes — the assertion is weaker than the counter's, exactly as the semantics allow.</p>
+
+  <h3>The golden snapshot test</h3>
+  <p><code>TestSnapshotGoldenFormat</code> feeds a fixed diet of metrics and compares the full
+     exposition output against a literal string, byte-for-byte. Golden tests look brittle and
+     are deliberately so: the format <em>is</em> the contract, consumed by parsers expecting
+     exact syntax, and any drift (missing space, wrong sort order, non-cumulative buckets,
+     float formatting like <code>3.50</code> instead of <code>3.5</code>) must break the build,
+     not production dashboards. Sorted-name emission within sections makes output deterministic
+     — map iteration order would otherwise flake the test and, worse, make scrapes
+     incomparable. <code>TestSnapshotEmptyCollectorRendersNothing</code> covers the degenerate
+     case: an empty collector must produce zero bytes, not a stray newline.</p>
+
+  <h3>Canned-JSON scraping against httptest</h3>
+  <pre><code>srv := httptest.<span class="fn">NewServer</span>(http.<span class="fn">HandlerFunc</span>(<span class="kw">func</span>(w http.<span class="typ">ResponseWriter</span>, r *http.<span class="typ">Request</span>) {
+    <span class="kw">switch</span> r.URL.Path {
+    <span class="kw">case</span> <span class="str">"/stats"</span>:
+        fmt.<span class="fn">Fprint</span>(w, <span class="str">`{"workers":{"active":7}}`</span>)
+    <span class="kw">default</span>:
+        http.<span class="fn">Error</span>(w, <span class="str">"boom"</span>, http.<span class="typ">StatusInternalServerError</span>)
+    }
+}))</code></pre>
+  <p>One httptest server plays both roles: a healthy target serving canned JSON and a failing
+     one returning 500s — no network, no external services, deterministic. The assertions then
+     walk the full success path and the full failure path: <code>pool</code> points carry
+     Value 7 parsed through the dotted path <code>workers.active</code> with non-zero
+     timestamps in oldest→newest order plus the derived <code>pool_last</code> gauge;
+     <code>flaky</code> accumulates <code>flaky_errors</code>, never gains a
+     <code>_last</code> gauge, and leaves an empty ring — proving failed fetches skip buffer
+     writes rather than recording garbage. The helper <code>waitFor</code> polls conditions
+     every 2 ms up to a generous deadline, converting "eventually true" async behavior into a
+     deterministic assertion without sleep-and-pray timings.</p>
+
+  <h3>Lifecycle edges and the generous-bounds philosophy</h3>
+  <p><code>TestStopIdempotent</code> runs Start → brief sleep → Stop → Stop inside a goroutine
+     with a 5-second watchdog: the second Stop must be a safe no-op, and any deadlock surfaces
+     as a named timeout instead of a hung suite. <code>TestObserveBoundsLockedAtFirstUse</code>
+     snapshots before and after a mismatched-bounds Observe and demands map equality — neither
+     growth nor mutation permitted. And the tick-discipline test embodies the project's timing
+     philosophy: assert a wide band (15–30 hits where theory says 25), because a timing test
+     that's tighter than the platform's scheduling jitter doesn't catch bugs, it manufactures
+     them. Throughout, primary assertions check counted things (values, lengths, error totals);
+     timing appears only as watchdogs with huge margins — the same methodology as project 08,
+     now applied to a system that actually runs on a clock.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Prometheus itself is Go — and so is most of its ecosystem</h3>
+    <p>The exposition format you emitted by hand is the lingua franca of cloud-native
+       monitoring, and the systems speaking it are overwhelmingly written in the language of
+       this course:</p>
+    <ul>
+      <li><strong>Prometheus</strong> — the CNCF monitoring standard, written in Go. Its
+          pull-based model is exactly what you built the server side of: it periodically
+          scrapes <code>/metrics</code> endpoints, parsing the same
+          <code>name{labels} value</code> lines your Snapshot emits. Its
+          <code>client_golang</code> library is the production version of your Collector —
+          after this project, reading its source feels like reviewing a familiar design.</li>
+      <li><strong>VictoriaMetrics</strong> — a Go-written, high-performance TSDB often deployed
+          as a Prometheus replacement. Its remote-write pipeline and storage compression are
+          the "full TSDB" road not taken in this project, industrialized: same ring-buffer
+          instincts, scaled to billions of samples.</li>
+      <li><strong>Grafana Agent (now Grafana Alloy)</strong> — a Go telemetry collector that
+          scrapes endpoints, transforms series, and fans results out — architecturally a
+          souped-up version of this project's Scraper: targets, intervals, per-target state,
+          error accounting.</li>
+      <li><strong>Kubernetes</strong> — every component (kubelet, apiserver, etcd's Go clients)
+          exposes Prometheus-format metrics on a port; cluster autoscaling decisions literally
+          consume lines shaped like the ones your daemon serves.</li>
+    </ul>
+  </div>
+
+  <h3>Why lock-free counters matter at scrape scale</h3>
+  <p>Metrics are the one instrumentation path that must get <em>cheaper</em> than the code it
+     measures. A high-traffic service might increment request counters millions of times per
+     second — if each increment took a contended global mutex, observability itself would become
+     the bottleneck, adding latency and serializing exactly the hot paths you're trying to
+     watch. Atomic adds compile to single CPU instructions on the hot path, letting thousands
+     of goroutines count concurrently with near-zero interference. This is why
+     <code>client_golang</code>'s counters are atomics behind the scenes, why VictoriaMetrics
+     brags about lock-free ingestion, and why the double-checked registration pattern you wrote
+     — lock once to create, then never lock again — is the shape real telemetry libraries ship.
+     The ring buffer has an industry twin too: bounded recent-history windows appear in
+     latency trackers, connection pool stats, and rate limiters wherever "the last N
+     observations" is the right amount of memory to spend on the past.</p>
+
+  <h3>From this project to production observability</h3>
+  <p>Every concept here maps one-to-one onto production vocabulary: your Collector is a metrics
+     <em>registry</em>; Snapshot is an <em>exposition handler</em>; the Scraper inverted becomes
+     Prometheus itself; ring buffers become <em>retention windows</em>; the eventual-consistency
+     of your snapshots reappears as the documented fact that scraped data is sampled, not
+     transactional. When you later wire a real service to Prometheus, nothing about the wire
+     format, the bucket semantics, or the concurrency model will be new — you'll recognize it,
+     because you built the small true version first.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="08-pubsubx.html">&larr; Previous: pubsubx</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 09 of 16</span>
+  <a class="btn" href="10-minikv.html">Next: minikv &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+</body>
+</html>
