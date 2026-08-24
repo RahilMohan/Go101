@@ -122,6 +122,12 @@ func (c *Checker) run(ctx context.Context, urls []string, interval time.Duration
 		tick = ticker.C
 	}
 
+	// filled[i] records that index i was handed to a worker; written only
+	// by the dispatcher, so no synchronization is needed. Repairing unfilled
+	// slots after cancellation keys off this marker rather than any zero
+	// value of Result, which a legitimate result could collide with.
+	filled := make([]bool, n)
+
 dispatch:
 	for idx := range n {
 		if tick != nil && idx > 0 {
@@ -135,6 +141,7 @@ dispatch:
 		case <-ctx.Done():
 			break dispatch
 		case jobs <- idx:
+			filled[idx] = true
 		}
 	}
 	close(jobs) // workers drain what was already sent, then exit
@@ -142,7 +149,7 @@ dispatch:
 
 	if err := ctx.Err(); err != nil {
 		for i := range results {
-			if results[i].URL == "" { // never picked up by a worker
+			if !filled[i] { // never scheduled, so never checked
 				results[i] = Result{URL: urls[i], Err: err}
 			}
 		}

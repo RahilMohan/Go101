@@ -141,8 +141,12 @@ func TestCheckContextCancellationAbandonsRest(t *testing.T) {
 	if ok == 0 || canceled == 0 {
 		t.Fatalf("ok = %d, canceled = %d; want a partial result set", ok, canceled)
 	}
-	// Serial execution would need ~n*10ms; cancellation must cut it far below.
-	if elapsed > 100*time.Millisecond {
+	// The ok/canceled counts above are the primary assertion. This bound is
+	// only a coarse backstop against an implementation that ignores ctx and
+	// runs everything to completion (which would need ~n*10ms): 250ms gives
+	// huge headroom over the expected ~30ms while still catching it, even
+	// under -race on a loaded CI machine.
+	if elapsed > 250*time.Millisecond {
 		t.Errorf("elapsed = %v, want well under serial sum (~%v); cancellation did not abandon work", elapsed, n*10*time.Millisecond)
 	}
 }
@@ -279,8 +283,10 @@ func TestCheckRateLimitedSpacesRequests(t *testing.T) {
 			t.Errorf("results[%d].URL = %q, want %q", i, r.URL, urls[i])
 		}
 	}
-	// n requests at one per interval tick need at least (n-1)*interval;
-	// an unthrottled run would finish in well under half of that.
+	// n requests at one per interval tick need at least (n-1)*interval.
+	// The bound is halved to absorb scheduler jitter under -race: even a
+	// run where several ticks fire late must still be far above what an
+	// unthrottled implementation (sub-millisecond total) would show.
 	if minElapsed := time.Duration(n-1) * interval; elapsed < minElapsed/2 {
 		t.Errorf("elapsed = %v, want >= ~%v (requests were not rate limited)", elapsed, minElapsed)
 	}

@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -50,8 +51,14 @@ func run() int {
 	checker.CloseIdleConnections()
 
 	failed := 0
+	checked := 0 // results that actually completed a check, not ctx-abandoned ones
 	for _, r := range results {
 		dur := r.Duration.Truncate(time.Millisecond)
+		if errors.Is(r.Err, context.Canceled) {
+			fmt.Printf("SKIP %-4d %-6s %s  %v\n", r.Status, dur, r.URL, r.Err)
+			continue
+		}
+		checked++
 		if r.Err != nil {
 			failed++
 			fmt.Printf("FAIL %-4d %-6s %s  %v\n", r.Status, dur, r.URL, r.Err)
@@ -60,7 +67,7 @@ func run() int {
 		fmt.Printf("OK   %-4d %-6s %s\n", r.Status, dur, r.URL)
 	}
 
-	fmt.Printf("\n%d/%d checked", len(results), flag.NArg())
+	fmt.Printf("\n%d/%d checked", checked, flag.NArg())
 	if ctx.Err() != nil {
 		fmt.Print(" (interrupted)")
 	}
