@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 03 — loglens</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible) */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal:nth-of-type(odd) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>loglens</h1>
+  <p class="subtitle">Go101 · Project 03 — a streaming access-log analyzer</p>
+  <div class="badge-row">
+    <span class="badge tier">Beginner Tier</span>
+    <span class="badge">regexp</span>
+    <span class="badge">bufio.Scanner</span>
+    <span class="badge">Error wrapping (%w)</span>
+    <span class="badge">errors.Is / errors.As</span>
+    <span class="badge">strconv</span>
+    <span class="badge">Streaming</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: pure standard library, one more time</h3>
+  <p>loglens leans on four load-bearing stdlib packages — <code>regexp</code>,
+     <code>bufio</code>, <code>errors</code>, and <code>strconv</code> — plus
+     <code>fmt</code>, <code>io</code>, <code>sort</code>, and <code>strings</code> in supporting
+     roles. No log-parsing library, no line-oriented DSL, no <code>go.sum</code>. Where project 01
+     proved you can build a real tool with nothing imported and project 02 proved persistence
+     needs no database, project 03 proves something about <strong>cost models</strong>: the same
+     library call can be free or catastrophic depending on where you put it.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in loglens</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>regexp</code></td><td>Match each line against one compiled pattern (<code>lineRe</code>)</td><td>Compile once at package level vs per-call costs — a 100&times;-style performance cliff hiding behind identical-looking code</td></tr>
+      <tr><td><code>bufio</code></td><td><code>Scanner</code> streams lines without ever loading whole files</td><td>Buffer limits are real: the 64KB default silently fails long lines unless you raise it</td></tr>
+      <tr><td><code>errors</code></td><td>Sentinels (<code>ErrMalformed</code>, <code>ErrSkip</code>) and the wrapping chain through <code>*LineError</code></td><td>Error values as data: wrap with <code>%w</code>, interrogate with <code>errors.Is</code>/<code>errors.As</code></td></tr>
+      <tr><td><code>strconv</code></td><td>Turn raw status/bytes captures into numbers</td><td>Parse failures become first-class errors you can wrap, not silent zeros</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>Full log-parsing libraries</strong> — Go's ecosystem has mature options for
+        structured and semi-structured logs. But they would hide the exact lesson this project
+        exists to teach: what a regex match actually costs and why compilation is a one-time
+        investment. When the parser is a black box, "compile once at package level" never comes up,
+        and neither does the discipline of distinguishing <em>skipped</em> lines from
+        <em>malformed</em> ones.</li>
+    <li><strong><code>strings.Fields</code>-only splitting</strong> — splitting on whitespace gets
+        you tokens fast, but it can't <em>validate structure</em>. A quoted request field contains
+        spaces; a timestamp lives inside brackets; there's no way to tell "five tokens that happen
+        to be a log line" from "five random tokens." The regex is the contract: either a line has
+        the shape of an access-log entry or it doesn't, and that decision is testable.</li>
+    <li><strong>Reading the whole file into memory</strong> — <code>os.ReadFile</code> plus a split
+        on newlines is three lines shorter and works fine until the file doesn't fit. Streaming via
+        <code>bufio.Scanner</code> is barely more code and scales to inputs many times larger than
+        RAM — the difference between a learning exercise and something you'd point at production logs.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>One-time regex compilation vs per-call costs.</strong> Moving
+        <code>regexp.MustCompile</code> out of the loop and to package level is the single most
+        memorable performance lesson in early Go — visible in benchmarks, explainable in one
+        sentence, applicable forever.</li>
+    <li><strong>Scanner streaming with buffer limits.</strong> <code>bufio.Scanner</code> looks
+        effortless until a real-world 800KB URL line trips its default cap and lines start
+        disappearing <em>silently</em>. Raising the limit explicitly teaches that convenience APIs
+        have configuration surfaces worth reading.</li>
+    <li><strong>Error wrapping chains.</strong> Sentinel + custom error type + <code>%w</code> +
+        <code>errors.As</code> composes into errors that carry structured context (which line?
+        which field? underlying cause?) while remaining programmatically checkable at every layer.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>loglens_test.go</code> at the project root — the executable
+     specification. If your implementation passes these tests, it satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Valid lines parse and aggregate.</strong> A well-formed common-format line
+        increments <code>Total</code>, adds 1 to <code>ByStatus[200]</code> (or whatever the status
+        is), and counts the path in <code>ByPath</code>. Lines with a byte count and lines with
+        <code>-</code> in place of bytes both work; CRLF endings are tolerated.</li>
+    <li><strong>R2 — Non-matching lines are skipped, not fatal.</strong> A line that doesn't match
+        the format ("this is not a log line") increments <code>Skipped</code> and analysis
+        continues. <code>Analyze</code> returns nil error for input containing only skippable lines.</li>
+    <li><strong>R3 — Mixed streams produce partial stats plus one precise error.</strong> For a
+        stream of valid, skipped, and malformed lines, <code>Analyze</code> returns non-nil stats
+        covering everything parsed before the failure <em>and</em> an error satisfying
+        <code>errors.As(err, &amp;lineErr)</code> whose <code>LineError.Line</code> is the 1-based
+        number of the malformed line (line 4 in the mixed fixture).</li>
+    <li><strong>R4 — Malformed fields surface ErrMalformed through the chain.</strong> A line with
+        the right shape but a non-numeric status yields an error satisfying
+        <code>errors.Is(err, ErrMalformed)</code> — reachable only if <code>LineError.Unwrap</code>
+        and <code>fmt.Errorf("%w")</code> wiring are intact.</li>
+    <li><strong>R5 — Large volumes aggregate exactly.</strong> 100,000 generated valid lines yield
+        <code>Total = 100000</code>, <code>Skipped = 0</code>, and by-status counts summing back to
+        exactly N — no lost or double-counted lines under sustained streaming.</li>
+    <li><strong>R6 — Very long lines still parse.</strong> A single ~800KB line (a pathological
+        URL) parses successfully — which is only possible if the Scanner buffer was raised above
+        the 64KB default.</li>
+    <li><strong>R7 — TopPaths sorts deterministically and clamps.</strong> Sorted by count
+        descending, ties broken by path ascending; requesting more than exists clamps to the
+        distinct-path count; <code>n &le; 0</code> returns an empty slice.</li>
+    <li><strong>R8 — CompilePattern exposes the shared pattern.</strong> Returns a usable
+        <code>*regexp.Regexp</code> that matches a valid log line — and never recompiles.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Constant memory.</strong> <code>Analyze</code> must never load the whole
+        input into memory; aggregation happens line-by-line as bytes stream through the Scanner.</li>
+    <li><strong>NF2 — Errors wrap, don't erase.</strong> Every failure travels as a wrapped chain:
+        strconv's own error nested inside <code>ErrMalformed</code> nested inside
+        <code>*LineError</code> — checkable at any layer via <code>errors.Is</code>/<code>As</code>.</li>
+    <li><strong>NF3 — Deterministic output ordering.</strong> Any sorted report derived from
+        <code>Stats</code> (like <code>TopPaths</code>) must be fully deterministic despite Go's
+        randomized map iteration — hence explicit tie-breaking rules.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: One package-level compiled pattern</h3>
+  <pre><code><span class="kw">var</span> lineRe = regexp.<span class="fn">MustCompile</span>(`^(\S+) \S+ (\S+) \[([^\]]*)\] <span class="str">"([A-Z]+) (\S+) [^"]*"</span> (\S+) (\S+)$`)</code></pre>
+  <p>This single line carries the project's central lesson. Regex compilation — building the
+     state machine that powers matching — is expensive relative to matching itself. Compile inside
+     <code>Analyze</code> and you pay that cost once per <em>call</em>; compile at package level
+     and you pay it once per <em>process</em>. On a million-line log the difference dominates
+     runtime entirely. <code>MustCompile</code> (panic-on-bad-pattern) is correct here precisely
+     because the pattern is a compile-time constant: if it's wrong, the program is broken and
+     should fail loudly at startup, not return errors at runtime. Note also what stays
+     <em>out</em> of the regex: status and bytes are captured as raw strings
+     (<code>(\S+)</code>, <code>(\S+)</code>) rather than <code>\d+</code>, so unparseable values
+     reach <code>strconv</code> and get reported as <code>ErrMalformed</code> instead of causing a
+     silent non-match that masquerades as "skipped."</p>
+
+  <h3>D2: Raise the Scanner buffer — or lose lines silently</h3>
+  <pre><code>sc := bufio.<span class="fn">NewScanner</span>(r)
+sc.<span class="fn">Buffer</span>(<span class="fn">make</span>([]<span class="typ">byte</span>, <span class="num">64</span>*<span class="num">1024</span>), maxLineSize) <span class="com">// maxLineSize = 1024 * 1024</span></code></pre>
+  <p>The Scanner's default limit is 64KB per token. Exceed it and <code>sc.Scan()</code> returns
+     false with <code>bufio.ErrTooLong</code> — which, fatally, looks exactly like clean
+     end-of-input if you don't check <code>sc.Err()</code>. Real access logs contain URLs far past
+     64KB (query-string attacks, deep paths, base64 blobs). The fix is one explicit
+     <code>Buffer</code> call raising the ceiling to 1MB, plus the final
+     <code>if err := sc.Err(); err != nil</code> check so I/O trouble becomes a returned error
+     instead of truncated results. This pitfall is why the test suite includes an ~800KB line: it
+     proves the limit was raised and proves the implementation didn't take the
+     "silently stop early" exit.</p>
+
+  <h3>D3: Partial-stats-on-error contract</h3>
+  <pre><code>status, err := strconv.<span class="fn">Atoi</span>(m[6])
+<span class="kw">if</span> err != <span class="kw">nil</span> {
+    <span class="kw">return</span> stats, &amp;<span class="typ">LineError</span>{Line: lineNum, Err: fmt.<span class="fn">Errorf</span>(<span class="str">"%w: status %q: %w"</span>, ErrMalformed, m[6], err)}
+}</code></pre>
+  <p>When a malformed line aborts analysis, the function returns <em>both</em> the stats gathered
+     so far <em>and</em> the error — never nil alongside an error. Callers (see the CLI's
+     <code>run</code>) can print the partial report and treat the LineError as a warning, because
+     "everything before line 4 is valid" is genuinely useful output. The abort policy is
+     deliberately asymmetric:</p>
+  <ul>
+    <li><strong>Skipped lines never abort.</strong> A non-matching line just increments
+        <code>stats.Skipped</code> and the loop continues — logs routinely contain noise
+        (blank lines, banners, startup messages) and treating each one as fatal would make the
+        tool useless on real files.</li>
+    <li><strong>The first malformed line aborts.</strong> A line that matches the log-entry
+        <em>shape</em> but has unparseable fields signals corrupted data, and continuing past
+        corruption risks reporting aggregates nobody should trust. So Analyze stops at the first
+        such line, reporting exactly that one line number in the <code>LineError</code>.</li>
+  </ul>
+  <p>Blank lines fall on the skip side: they don't match the format, so they increment
+     <code>Skipped</code> like any other noise.</p>
+
+  <h3>D4: Skipped vs malformed — two different failures</h3>
+  <p>The distinction is the heart of the design. <em>Skipped</em> means "this line isn't a log
+     entry at all" — expected, counted, harmless. <em>Malformed</em> means "this line claims to be
+     a log entry but its fields are garbage" — unexpected, specific, abort-worthy. Collapsing them
+     into one bucket destroys information: you'd either crash on ordinary noise or silently ignore
+     corruption. The two sentinels encode the policy in the type system:
+     <code>ErrSkip</code> names the benign case and <code>ErrMalformed</code> the severe one.</p>
+  <div class="callout">
+    <p><strong>Honesty note:</strong> <code>ErrSkip</code> is currently <em>declared but never
+    produced</em> — skipped lines simply increment a counter without constructing an error. Treat
+    it as reserved API surface for learner extension exercises: e.g., collect every skipped line's
+    number into a <code>[]*LineError{..., Err: ErrSkip}</code> and report them after the scan, or
+    add a strict mode where skips abort too. The sentinel exists so those extensions don't need to
+    invent their own vocabulary.</p>
+  </div>
+
+  <h3>D5: Library core, thin command shell</h3>
+  <pre><code>projects/03-loglens/
+├── loglens.go               <span class="com"># package loglens — stubs you implement</span>
+├── loglens_test.go          <span class="com"># the executable spec</span>
+└── solution/
+    ├── solution.go          <span class="com"># package solution — lineRe, Analyze, Stats</span>
+    └── cmd/loglens/main.go  <span class="com"># flag parsing + report printing</span></code></pre>
+  <p>All parsing and aggregation lives in the library; <code>main</code> only handles flags
+     (<code>-n</code> top-N paths, <code>-status</code> filter), iterates input files (or stdin),
+     and formats output. Its one piece of judgment is interpreting the partial-stats contract:
+     a <code>*LineError</code> prints as a warning and the run still exits 0 with its partial
+     report; anything else (unreadable file, scanner failure) exits 1. Same
+     library-plus-cmd layout as projects 01 and 02 — by now it should feel like the default shape
+     of a Go tool.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>regexp.MustCompile vs Compile — panic-once philosophy</h3>
+  <div class="callout">
+    <p><strong>The idea:</strong> <code>Compile</code> returns <code>(*Regexp, error)</code>;
+       <code>MustCompile</code> panics on a bad pattern. Choose based on where the pattern comes
+       from: constants want MustCompile, user input wants Compile.</p>
+  </div>
+  <pre><code><span class="kw">var</span> lineRe = regexp.<span class="fn">MustCompile</span>(`^(\S+) \S+ (\S+) \[([^\]]*)\] ...`)  <span class="com">// package level, once</span>
+
+m := lineRe.<span class="fn">FindStringSubmatch</span>(line)  <span class="com">// cheap: reuse the compiled machine</span></code></pre>
+  <p>A literal pattern in source code can't vary at runtime, so an error branch for it is dead
+     weight — if the author typo'd the regex, every execution is equally doomed, and failing
+     immediately at process start (via panic during package initialization) is strictly better
+     than failing lazily mid-request. That's the entire rationale of the <code>Must*</code>
+     convention, which recurs across the stdlib (<code>template.Must</code>,
+     <code>sql.Open</code> wrappers). The flip side is placement: even a correctly compiled regex
+     recompiles every time <code>MustCompile</code> executes, so the variable must live outside
+     whatever function runs per-line. Benchmark this yourself — move the compile inside
+     <code>Analyze</code> and watch the throughput collapse. It is the most vivid
+     constant-vs-recompute lesson available in pure stdlib Go.</p>
+
+  <h3>bufio.Scanner mechanics — tokenization over a Reader</h3>
+  <pre><code>sc := bufio.<span class="fn">NewScanner</span>(r)
+<span class="kw">for</span> sc.<span class="fn">Scan</span>() {          <span class="com">// true per line, false at EOF or error</span>
+    line := sc.<span class="fn">Text</span>()      <span class="com">// string copy of the token, newline stripped</span>
+}
+<span class="kw">if</span> err := sc.<span class="fn">Err</span>(); err != <span class="kw">nil</span> { <span class="com">/* handle */</span> }</code></pre>
+  <p>A Scanner pulls bytes from any <code>io.Reader</code> in buffered chunks, splits them into
+     tokens (lines, by default), and hands you one token per <code>Scan()</code>. Three details
+     matter here. First, memory: at any moment only one buffer-sized chunk of input is alive — the
+     whole file never exists in your process, which is what makes TB-scale inputs tractable.
+     Second, <code>Text()</code> copies the token into a string; <code>Bytes()</code> returns a
+     slice into the internal buffer that's invalidated by the next <code>Scan()</code> — use Text
+     when you keep the value past the loop iteration (as Analyze does when storing map keys).
+     Third, the loop's false exit is ambiguous between "done" and "gave up": only
+     <code>Err()</code> distinguishes clean EOF from <code>ErrTooLong</code> or an I/O failure.
+     Skipping that check is how implementations silently drop data — the exact bug D2 exists to
+     prevent.</p>
+
+  <h3>errors.As with a custom type — the Unwrap chain</h3>
+  <pre><code><span class="kw">type</span> <span class="typ">LineError</span> <span class="kw">struct</span> {
+    Line <span class="typ">int</span>   <span class="com">// 1-based</span>
+    Err  <span class="kw">error</span> <span class="com">// ErrSkip or a wrapped parse failure</span>
+}
+
+<span class="kw">func</span> (e *<span class="typ">LineError</span>) <span class="fn">Error</span>() <span class="typ">string</span> { <span class="kw">return</span> fmt.<span class="fn">Sprintf</span>(<span class="str">"loglens: line %d: %v"</span>, e.Line, e.Err) }
+<span class="kw">func</span> (e *<span class="typ">LineError</span>) <span class="fn">Unwrap</span>() <span class="kw">error</span>  { <span class="kw">return</span> e.Err }</code></pre>
+  <p>Sentinels answer "is this <em>that kind</em> of failure?" (<code>errors.Is</code>). Custom
+     error types answer "what are the <em>structured details</em>?" (<code>errors.As</code>).
+     Here the detail is the offending line number, which no string comparison should ever have to
+     recover. The chain built for a bad status on line 4 looks like this, unwrapped layer by
+     layer:</p>
+  <pre><code>*LineError{Line: 4}                       <span class="com">// errors.As target — carries the line number</span>
+└── Unwrap() →
+    fmt.Errorf-wrapped: "malformed line: status \"abc\": ..."   <span class="com">// %w → ErrMalformed</span>
+    ├── errors.Is target: ErrMalformed                          <span class="com">// the domain sentinel</span>
+    └── innermost %w → strconv.NumError                         <span class="com">// the raw parse failure</span></code></pre>
+  <p>The magic double-<code>%w</code> line does the splicing:</p>
+  <pre><code>fmt.<span class="fn">Errorf</span>(<span class="str">"%w: status %q: %w"</span>, ErrMalformed, m[6], err)</code></pre>
+  <p>Since Go 1.20, <code>fmt.Errorf</code> accepts multiple <code>%w</code> verbs, producing an
+     error with several wrapped parents — so one formatted message simultaneously links to
+     <code>ErrMalformed</code> (for <code>errors.Is</code> checks) and to the original
+     <code>strconv.NumError</code> (for callers who want field-level forensics). The tests pin
+     both ends: <code>TestAnalyzeMixedStreaming</code> asserts <code>errors.As(err, &amp;le)</code>
+     with <code>le.Line == 4</code>; <code>TestSentinelErrors</code> asserts
+     <code>errors.Is(err, ErrMalformed)</code> survives the full chain. Break
+     <code>Unwrap</code> — return nil, forget the method — and both tests fail, proving the chain
+     is architecture, not decoration.</p>
+
+  <h3>strconv errors wrapped inside LineError</h3>
+  <pre><code>status, err := strconv.<span class="fn">Atoi</span>(m[6])          <span class="com">// m[6] is the raw captured string</span>
+<span class="kw">if</span> err != <span class="kw">nil</span> {
+    <span class="kw">return</span> stats, &amp;<span class="typ">LineError</span>{Line: lineNum, Err: fmt.<span class="fn">Errorf</span>(<span class="str">"%w: status %q: %w"</span>, ErrMalformed, m[6], err)}
+}</code></pre>
+  <p><code>strconv.Atoi</code> never panics or coerces — a failed parse returns a typed
+     <code>*strconv.NumError</code> carrying the function name, the original string, and the
+     syntax/range cause. Discarding it (or flattening it into a message) throws away exactly the
+     context a debugger wants. Wrapping it preserves the whole story: <em>which line</em>
+     (LineError), <em>which field and value</em> (<code>status %q</code>), <em>why it failed</em>
+     (the NumError itself). Also notice the deliberate asymmetry in the bytes field:
+     <code>"-"</code> is checked <em>before</em> parsing, because the format defines it as "no
+     bytes recorded," not as a parse failure. Format-level conventions belong in explicit
+     branches; numeric validation belongs to strconv — each concern handled by the layer built
+     for it.</p>
+
+  <h3>Map aggregation patterns — counting without order illusions</h3>
+  <pre><code>stats.ByStatus[status]++
+stats.ByPath[m[5]]++</code></pre>
+  <p>The zero-value trick makes aggregation one line: indexing a nil-or-empty map returns zero, so
+     <code>m[k]++</code> works without any "does the key exist" ceremony. Both maps are
+     pre-initialized in the constructor anyway so callers always receive usable, non-nil maps even
+     on empty input. The trap arrives at read time: ranging over these maps yields keys in
+     randomized order, so any ordered view must sort explicitly. That's
+     <code>TopPaths</code>' job — flatten to a slice, <code>sort.Slice</code> with count-desc then
+     path-asc tie-break, clamp to <code>n</code>. The tie-break isn't cosmetic: without it, equal
+     counts would shuffle between runs, making output non-reproducible and any golden-file testing
+     impossible. Determinism is a feature you opt into with a comparator.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Mixed fixtures prove the streaming contract</h3>
+  <p><code>TestAnalyzeMixedStreaming</code> builds one input containing a valid line, a garbage
+     line, another valid line, a malformed line, and a blank line — five kinds of reality in six
+     lines of text. Then it asserts everything at once:</p>
+  <pre><code><span class="kw">var</span> le *<span class="typ">LineError</span>
+<span class="kw">if</span> !errors.<span class="fn">As</span>(err, &amp;le) {
+    t.<span class="fn">Fatalf</span>(<span class="str">"error %T (%v) is not a *LineError"</span>, err, err)
+}
+<span class="kw">if</span> le.Line != <span class="num">4</span> {
+    t.<span class="fn">Errorf</span>(<span class="str">"LineError.Line = %d, want 4"</span>, le.Line)
+}
+<span class="kw">if</span> stats.Total != <span class="num">2</span> || stats.Skipped != <span class="num">1</span> { <span class="com">/* partial stats required */</span> }</code></pre>
+  <p>The assertions interlock: stats must be <em>non-nil</em> alongside the error (the
+     partial-stats contract), totals must reflect exactly the two lines parsed before the
+     failure, the blank line must count as skipped, and the reported line number must be the
+     first malformed one — not the last, not a count. A table-driven sibling
+     (<code>TestAnalyzeSingleLine</code>) covers the individual cases: minimal entries, entries
+     with bytes, CRLF tolerance, and pure-skip input returning nil error.</p>
+
+  <h3>The 800KB line: buffer limits are testable behavior</h3>
+  <pre><code>longPath := <span class="str">"/"</span> + strings.<span class="fn">Repeat</span>(<span class="str">"a"</span>, <span class="num">800_000</span>) <span class="com">// proves the raised Scanner limit</span>
+line := fmt.<span class="fn">Sprintf</span>(<span class="str">"1.2.3.4 - - [t] \"GET %s HTTP/1.1\" 200 -\n"</span>, longPath)</code></pre>
+  <p>Most tests exercise logic; this one exercises <em>configuration</em>. An implementation using
+     the Scanner's default 64KB buffer fails here not with a wrong answer but with a missing
+     line — or worse, with <code>ErrTooLong</code> mistaken for EOF. Building a single ~800KB
+     input makes the raised limit observable: pass and you know <code>Buffer()</code> was called
+     and <code>sc.Err()</code> handled. Meanwhile <code>TestAnalyzeLargeInput</code> generates
+     100,000 lines across five status codes and asserts the by-status counts sum back to exactly
+     N — a conservation law catching off-by-one and dropped-token bugs that small inputs hide.</p>
+
+  <h3>Sentinel assertions via errors.Is / errors.As</h3>
+  <pre><code><span class="kw">if</span> !errors.<span class="fn">Is</span>(err, ErrMalformed) {
+    t.<span class="fn">Errorf</span>(<span class="str">"errors.Is(err, ErrMalformed) = false through LineError chain"</span>)
+}</code></pre>
+  <p>Like taskline before it, the suite demands wrapping discipline, not just error presence: the
+     assertion passes only if <code>%w</code> wiring connects the returned error to the sentinel
+     through however many layers intervene. <code>TestSentinelErrors</code> goes further,
+     asserting <code>le.Unwrap() != nil</code> — the chain must continue <em>past</em> the
+     LineError to whatever caused it. These are tests of mechanism: you cannot satisfy them by
+     formatting a convincing message string, only by building the actual linked structure.</p>
+
+  <h3>TopPaths: ordering, tie-breaks, and edge cases</h3>
+  <pre><code>want := []<span class="typ">PathCount</span>{
+    {<span class="str">"/c"</span>, <span class="num">5</span>},
+    {<span class="str">"/a"</span>, <span class="num">3</span>}, <span class="com">// tie with /b broken by path asc</span>
+    {<span class="str">"/b"</span>, <span class="num">3</span>},
+}</code></pre>
+  <p>The fixture engineers a deliberate tie (<code>/a</code> and <code>/b</code> both at count 3)
+     and pins the deterministic resolution: alphabetical. Without the tie-break rule, map
+     iteration randomness could swap them run-to-run and flake the test — which is precisely the
+     bug the test exists to prevent ever shipping. Edge cases ride along: <code>n=100</code>
+     against four paths clamps to four, <code>n=0</code> returns an empty (non-nil-behavior-safe)
+     slice. Sorting logic with tie-breaks is exactly the kind of code where "looks right" and "is
+     right" diverge, so the spec encodes the difference.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>Streaming, regex-shaped, line-oriented processing is the daily bread of observability
+       infrastructure — much of it written in Go:</p>
+    <ul>
+      <li><strong>Prometheus</strong> — scrapes and stores time series from endpoints whose
+          exposition formats are line-oriented text; the parser family it grew up with
+          (<code>expfmt</code>) processes exactly the kind of streamed text this project does,
+          just with more rigor and more years of optimization.</li>
+      <li><strong>Grafana Loki</strong> — a log-aggregation system written largely in Go whose
+          whole premise is "treat logs as streams of labeled lines." Its ingestion pipeline faces
+          the same problems as loglens — arbitrary formats, malformed input, enormous volume —
+          at industrial scale.</li>
+      <li><strong>Vector-alternatives in Go</strong> — the log-shipping ecosystem (Fluent Bit
+          plugins, Telegraf tail inputs, homegrown collectors) is full of Go daemons doing
+          bufio-style tailing plus format detection plus aggregation, deployed on millions of
+          hosts.</li>
+      <li><strong>nginx/Apache combined log format</strong> — the format loglens parses is the
+          de-facto standard for web servers worldwide; every analytics pipeline, WAF, and bot
+          detector that starts from raw access logs begins with a parser shaped like
+          <code>lineRe</code>.</li>
+    </ul>
+  </div>
+
+  <h3>Why streaming matters at TB scale</h3>
+  <ol>
+    <li><strong>Memory is the constraint, CPU is negotiable.</strong> A busy service produces
+        gigabytes of access logs per day; a fleet produces terabytes. Loading even one day's input
+        into RAM is a non-starter, so production parsers are all variations of
+        <code>bufio.Scanner</code>: read a bounded chunk, extract a record, aggregate, discard,
+        repeat. The aggregation maps grow with <em>distinct</em> keys, not total volume — which is
+        why the by-status/by-path shape scales when raw line storage wouldn't.</li>
+    <li><strong>Silent truncation is the classic outage.</strong> The Scanner's default-limit
+        pitfall isn't academic: log pipelines everywhere have quietly dropped long lines —
+        losing evidence during incident response — because someone forgot a
+        <code>Buffer()</code> call or an <code>Err()</code> check. The habit of asking "what does
+        this API do at its limits, and does failure look like success?" is learned once here and
+        applied to every reader-based API afterward.</li>
+    <li><strong>The compile-once principle compounds.</strong> Prometheus compiles metric-name
+        matchers once; Loki compiles label matchers once; every hot-path regex in production Go
+        lives at package scope or in a constructor. Learning the cost model on a toy analyzer
+        means recognizing — and benchmarking — the anti-pattern instantly when you meet it in a
+        code review.</li>
+  </ol>
+  <p>The through-line: one compiled regex, one buffered scanner, and a disciplined error chain
+     are not teaching simplifications. They're the skeleton of every serious log pipeline in the
+     Go ecosystem — exercised here in under 200 lines, against a format that has outlived several
+     of its critics.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="02-taskline.html">&larr; Previous: taskline</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 03 of 16</span>
+  <a class="btn" href="04-moneylib.html">Next: moneylib &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
