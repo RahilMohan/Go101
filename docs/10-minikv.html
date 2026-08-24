@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 10 — minikv</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+
+<body>
+
+<header class="reveal visible">
+  <h1>minikv</h1>
+  <p class="subtitle">Go101 · Project 10 — a durable Redis-like key/value store</p>
+  <div class="badge-row">
+    <span class="badge tier">Advanced Tier</span>
+    <span class="badge">RESP subset</span>
+    <span class="badge">Write-ahead log</span>
+    <span class="badge">fsync batching</span>
+    <span class="badge">TTL expiry</span>
+    <span class="badge">LRU eviction</span>
+    <span class="badge">net/tcp</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: a hand-rolled wire protocol, a hand-rolled log, and the kernel</h3>
+  <p>minikv is built from three deliberate choices: a <strong>hand-rolled RESP subset</strong>
+     for the client protocol, a <strong>length-prefixed binary WAL</strong> written with raw
+     <code>os.File</code> appends, and <strong>stdlib <code>net</code></strong> for the TCP
+     server. No Redis client library, no protocol codec, no storage engine, no
+     <code>go.sum</code>. Projects 01–09 proved parsing, HTTP, concurrency, and pub/sub don't
+     need dependencies; project 10 raises the stakes again, because persistence is where
+     hand-rolled code is most dangerous — a bug here doesn't drop a message, it loses data
+     the user believed was safe.</p>
+
+  <table>
+    <thead>
+      <tr><th>Component</th><th>Role in minikv</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Hand-rolled RESP subset</td><td><code>*n</code> array-of-bulk-strings requests over TCP; simple/error/integer/bulk reply frames; a hard cap on declared bulk lengths</td><td>Wire protocols are just framing rules — and every length a peer declares is an allocation request you must veto</td></tr>
+      <tr><td>Length-prefixed binary WAL</td><td>u32 big-endian length + count-of-args + length-prefixed arg bytes, appended per write command</td><td>Append-only logs, binary-safe framing, and why "torn final record" deserves different treatment than mid-file corruption</td></tr>
+      <tr><td><code>os</code> / <code>write(2)</code>/<code>fsync(2)</code></td><td>Every write reaches the OS immediately; <code>SyncEveryN</code> batches explicit <code>fsync</code>s</td><td>The three-level durability ladder — process crash, machine crash, disk loss — and which knob buys protection from each</td></tr>
+      <tr><td><code>net</code> + goroutine-per-conn</td><td>Listener loop, tracked connections, graceful drain via <code>WaitGroup</code></td><td>Server lifecycle discipline: register-and-count atomically, drain politely, force-close on deadline</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>A real RESP library</strong> (<code>go-redis</code>, <code>redcon</code>) —
+        these are excellent production tools, and that's the problem: they hide the wire format
+        behind <code>client.Set(ctx, k, v, ttl)</code>. This project's lesson <em>is</em> the
+        wire format — how bulk strings make values binary-safe, why a hostile
+        <code>$2000000000</code> length must be rejected before allocating, what exact bytes
+        <code>$-1\r\n</code> sends for a missing key. A codec library compresses all of it into
+        someone else's <code>switch</code>.</li>
+    <li><strong>A full LSM tree</strong> — memtable, immutable SSTables, compaction,
+        bloom filters. LSMs are how real embedded databases achieve write amplification
+        wins at scale, but they're a multi-thousand-line project whose core difficulty
+        (compaction scheduling) teaches nothing this project targets. An append-only log
+        plus an in-memory map captures the durability lesson in ~300 lines.</li>
+    <li><strong><code>goleveldb</code> (or bbolt as the backing store)</strong> — same
+        objection, sharper form: using a database library to build a database teaches you
+        the library's API, not the ideas underneath it. You'd get durability for free and
+        learn nothing about <em>why</em> fsync placement decides whether a crash costs you
+        one write or five seconds of them.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Crash-consistency thinking.</strong> Every append has a failure window: the
+        header written but not the payload, the payload written but not synced. minikv forces
+        you to enumerate those states and give each one a defined recovery — truncate and
+        continue for a torn tail, refuse to start for mid-file damage — instead of hoping
+        crashes land between writes.</li>
+    <li><strong>fsync tradeoffs as a tunable, not folklore.</strong> The
+        <code>SyncEveryN</code> dial makes the durability-vs-throughput bargain concrete:
+        <code>1</code> survives power loss per-write at group-commit-free cost, <code>N</code>
+        trades a bounded loss window for throughput, <code>0</code> delegates timing to the
+        kernel entirely. After implementing all three modes and testing each, "how durable is
+        durable?" stops being a hand-wave.</li>
+    <li><strong>Protocol design under truncation.</strong> A length-prefixed stream must be
+        parsable <em>prefix-wise</em>: every record boundary is discoverable from bytes alone,
+        so a log cut at an arbitrary point decomposes cleanly into "complete prefix" plus
+        "suspect tail." Designing framings with that property — and testing them at
+        <em>every</em> truncation point — is the transferable skill behind every log-structured
+        system.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>minikv_test.go</code> — the executable specification. If your
+     implementation passes these tests (including under <code>-race</code>), it satisfies the
+     requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — RESP-subset round trip over real TCP.</strong> PING replies
+        <code>+PONG\r\n</code>; SET replies <code>+OK</code>; GET replies the value as a bulk
+        string and <code>$-1</code> for missing; KEYS replies sorted newline-joined keys as one
+        bulk string; DEL replies <code>:1</code>/<code>:0</code>; TTL replies whole seconds
+        remaining, <code>:-1</code> for no expiry, <code>:-2</code> for missing; unknown
+        commands and wrong arity produce <code>-ERR …</code> frames.</li>
+    <li><strong>R2 — Hostile bulk lengths get a protocol error, not an allocation.</strong>
+        Sending <code>*1\r\n$2000000000\r\n</code> yields exactly
+        <code>-ERR protocol error\r\n</code> — the connection dies, the server lives.</li>
+    <li><strong>R3 — WAL replay reproduces identical state.</strong> After 100 mixed
+        SET/SET&nbsp;EX/DEL operations (values including whitespace and a literal CRLF pair,
+        proving binary-safe framing), close and reopen yields the same keys, the same values,
+        and the same key count.</li>
+    <li><strong>R4 — Crash consistency without clean shutdown.</strong> Copying the WAL
+        mid-run (handle abandoned via the <code>kill()</code> hook, never fsynced or closed)
+        and reopening preserves all acknowledged writes.</li>
+    <li><strong>R5 — Torn tails recover gracefully.</strong> Truncating a valid WAL at every
+        record boundary <em>and</em> at boundary−1 (mid-header) replays cleanly, keeping
+        exactly the records fully inside the file — verified exhaustively across all cut
+        points.</li>
+    <li><strong>R6 — Mid-file corruption is a loud error.</strong> Flipping one byte of a
+        command name deep in the log makes <code>NewEngine</code> fail with an error mentioning
+        corruption — never a silent partial replay.</li>
+    <li><strong>R7 — Recovery keeps the WAL writable (the C1 regression).</strong> After a
+        torn-tail reopen, appending a new record, closing, and reopening must succeed; the
+        torn record must stay dead, not resurrect.</li>
+    <li><strong>R8 — Expiry deadlines survive restarts absolutely (the I1 regression).</strong>
+        A key set with <code>EX 5</code>, crashed on, and reopened ~1.2s later reports a
+        shrunk remainder (~3–4s) — never a reset clock reporting 5 — and a subsequent clean
+        reopen can only shrink the TTL further.</li>
+    <li><strong>R9 — TTL semantics: lazy expiry, active sweep, honest reporting.</strong> An
+        expired key vanishes on read (lazy), disappears without any reads within ~a sweep tick
+        (active, verified via internal map size), reports correct TTL values, and a plain
+        <code>SET</code> overwrite clears a prior expiry.</li>
+    <li><strong>R10 — LRU eviction evicts the right victims, and only under policy
+        "lru".</strong> Under a tight cap, touching k1 makes k2 the next victim; inserts evict
+        in least-recently-accessed order; policy "none" never evicts even under an absurdly
+        small cap.</li>
+    <li><strong>R11 — Concurrent Apply is race-clean and leaves the engine usable.</strong>
+        Eight goroutines × 200 mixed ops under <code>-race</code>, then a normal SET/GET
+        works.</li>
+    <li><strong>R12 — All SyncEveryN modes function.</strong> 0, 1, and 5 each survive 25
+        writes across close/reopen.</li>
+    <li><strong>R13 — Config validation rejects nonsense early:</strong> unknown eviction
+        policies and negative <code>SyncEveryN</code> error at construction.</li>
+    <li><strong>R14 — Server lifecycle drains cleanly.</strong> <code>Shutdown</code> lets
+        in-flight commands finish and makes <code>ListenAndServe</code> return nil.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Binary-safe everywhere.</strong> Values may contain CRLF, spaces, and
+        arbitrary bytes on both the wire protocol and the WAL; nothing is delimited by
+        convention, everything by counted lengths.</li>
+    <li><strong>NF2 — Bounded allocations against hostile input.</strong> Declared record and
+        bulk lengths are capped up front; a client's say-so can never trigger a giant
+        allocation.</li>
+    <li><strong>NF3 — Bounded background work.</strong> The expiry sweeper examines at most a
+        fixed number of entries per tick, so keyspace size cannot turn a tick into a
+        stop-the-world scan.</li>
+    <li><strong>NF4 — Idempotent lifecycle.</strong> <code>Engine.Close</code> runs once via
+        <code>sync.Once</code>, joins the sweeper before closing the WAL, and is safe to defer
+        unconditionally.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Engine/Server split — a testable core behind a thin protocol shell</h3>
+  <pre><code>projects/10-minikv/
+├── minikv.go              <span class="com"># package minikv — stubs you implement</span>
+├── minikv_test.go         <span class="com"># the executable spec (engine + server)</span>
+└── solution/
+    ├── minikv.go          <span class="com"># Engine, walFile, Server — all in one package</span>
+    └── cmd/minikv/main.go <span class="com"># flags, listen, signal-driven shutdown</span></code></pre>
+  <p>The <strong>Engine</strong> owns state: a mutex-guarded map of entries with TTL metadata,
+     memory accounting, the WAL appender, and the sweeper goroutine. Its
+     <code>Apply(cmd, args…)</code> executes commands and logs them — no sockets involved.
+     The <strong>Server</strong> owns transport: accept loop, RESP parsing, frame writing,
+     connection tracking. This split is what makes the hard parts testable without a network:
+     WAL replay, torn tails, TTL clocks, and eviction are all exercised through engine calls,
+     while the protocol tests speak raw bytes over real TCP. It mirrors how Redis itself
+     separates command execution (<code>t_string.c</code>, <code>db.c</code>) from the
+     networking layer.</p>
+
+  <h3>D2: WAL framing — two levels of length prefixes</h3>
+  <pre><code><span class="com">// u32 big-endian record length | u32 argc | per-arg: u32 len + raw bytes</span>
+<span class="kw">func</span> <span class="fn">encodeRecord</span>(args []<span class="typ">string</span>) []<span class="typ">byte</span> {
+    buf := <span class="fn">make</span>([]<span class="typ">byte</span>, <span class="num">4</span>, total)
+    binary.<span class="typ">BigEndian</span>.<span class="fn">PutUint32</span>(buf, <span class="typ">uint32</span>(len(args)))
+    <span class="kw">for</span> _, a := <span class="kw">range</span> args {
+        <span class="kw">var</span> l [<span class="num">4</span>]<span class="typ">byte</span>
+        binary.<span class="typ">BigEndian</span>.<span class="fn">PutUint32</span>(l[:], <span class="typ">uint32</span>(len(a)))
+        buf = <span class="fn">append</span>(buf, l[:]...)
+        buf = <span class="fn">append</span>(buf, a...)
+    }
+    <span class="kw">return</span> buf
+}</code></pre>
+  <p>Each record is self-delimiting: read 4 bytes for its total length, then parse the payload
+     as a count plus counted argument strings. Because every field is counted, values may
+     contain anything — CRLF pairs, spaces, null bytes — with zero escaping. Two guards ride
+     along: <code>maxRecordLen</code> (64 MiB) rejects absurd length prefixes so a corrupted
+     header can't trigger a giant allocation, and <code>decodeRecord</code> demands the payload
+     be consumed <em>exactly</em> (<code>pos == len(p)</code>), so trailing bytes are corruption,
+     not trivia.</p>
+
+  <h3>D3: Torn-tail recovery — truncate to the last good boundary</h3>
+  <pre><code><span class="kw">func</span> (w *walFile) <span class="fn">truncateTo</span>(offset <span class="typ">int64</span>) <span class="typ">error</span> {
+    <span class="kw">if</span> err := w.f.<span class="fn">Truncate</span>(offset); err != <span class="kw">nil</span> {
+        <span class="kw">return</span> err
+    }
+    <span class="kw">if</span> _, err := w.f.<span class="fn">Seek</span>(offset, io.<span class="typ">SeekStart</span>); err != <span class="kw">nil</span> {
+        <span class="kw">return</span> err
+    }
+    <span class="kw">return</span> w.f.<span class="fn">Sync</span>()
+}</code></pre>
+  <p>Replay tracks <code>lastGood</code>, the end offset of the last complete record. When
+     <code>nextRecord</code> reports a torn tail (header half-read, or payload cut short),
+     replay warns on stderr, truncates the file to <code>lastGood</code>, and continues — the
+     engine starts with the complete prefix and can append immediately. The <code>Seek</code>
+     is not optional decoration: without it the first post-recovery write would land
+     <em>after the torn bytes</em>, and the next reopen would hit them and fail with a
+     corruption error. This is the C1 regression the test suite pins permanently.</p>
+
+  <h3>D4: Absolute expiry on the wire — the internal EXAT extension</h3>
+  <pre><code><span class="kw">if</span> persist {
+    <span class="com">// Log the absolute expiry, never relative seconds: replay must</span>
+    <span class="com">// restore the exact deadline, not restart the clock.</span>
+    recArgs := <span class="fn">append</span>([]<span class="typ">string</span>{cmd}, args...)
+    <span class="kw">if</span> len(args) == <span class="num">4</span> &amp;&amp; !exp.IsZero() {
+        recArgs = []<span class="typ">string</span>{<span class="str">"SET"</span>, args[<span class="num">0</span>], args[<span class="num">1</span>], <span class="str">"EXAT"</span>,
+            strconv.<span class="fn">FormatInt</span>(exp.<span class="fn">UnixNano</span>(), <span class="num">10</span>)}
+    }
+    ...</code></pre>
+  <p>If the WAL stored <code>SET tk v EX 3600</code>, every restart would gift the key a fresh
+     hour — a TTL that never dies. So <code>SET k v EX n</code> is logged internally as
+     <code>SET k v EXAT &lt;unix-nano&gt;</code>, pinning the absolute deadline; replay restores
+     the <em>remaining</em> time, exactly like Redis's own AOF rewriting relative expiries into
+     absolute ones. <code>EXAT</code> is accepted by the command layer too (matching Redis
+     semantics, where <code>EXAT</code> is a documented option) — a deliberate extension, with
+     unix-nanos as the internal form. Note also what's <em>absent</em> from the log: deletions
+     performed by lazy expiry or the sweeper. Expired keys are derived state — their
+     <code>EXAT</code> deadline replays as already-past, so they filter themselves; logging the
+     DELs would be redundant bytes.</p>
+
+  <h3>D5: Lazy expiry plus a bounded active sweep</h3>
+  <pre><code><span class="kw">func</span> (e *Engine) <span class="fn">liveLocked</span>(key <span class="typ">string</span>) (<span class="typ">entry</span>, <span class="typ">bool</span>) {
+    ent, ok := e.data[key]
+    ...
+    <span class="kw">if</span> !ent.expiresAt.IsZero() &amp;&amp; !time.<span class="fn">Now</span>().Before(ent.expiresAt) {
+        e.<span class="fn">deleteLocked</span>(key)   <span class="com">// lazy: expire on touch</span>
+        <span class="kw">return</span> entry{}, <span class="kw">false</span>
+    }
+    ent.lastAccess = time.<span class="fn">Now</span>()   <span class="com">// read path refreshes LRU recency</span>
+    e.data[key] = ent
+    <span class="kw">return</span> ent, <span class="kw">true</span>
+}
+
+<span class="kw">func</span> (e *Engine) <span class="fn">sweepOnce</span>() {   <span class="com">// ticker fires once per second</span>
+    e.mu.Lock(); <span class="kw">defer</span> e.mu.Unlock()
+    examined := <span class="num">0</span>
+    <span class="kw">for</span> k, ent := <span class="kw">range</span> e.data {
+        <span class="kw">if</span> examined &gt;= maxSweepScan { <span class="kw">break</span> }   <span class="com">// ≤128 per tick</span>
+        examined++
+        <span class="kw">if</span> expired(ent) { e.<span class="fn">deleteLocked</span>(k) }
+    }
+}</code></pre>
+  <p>This is Redis's actual two-pronged expiry strategy, miniaturized. Lazy expiry alone is
+     cheap but leaks: keys nobody ever reads again hold memory forever. Active sweeping fixes
+     that, but an unbounded scan of a million-key map inside one tick is a stop-the-world
+     event. The bound — examine at most <code>maxSweepScan</code> entries per pass — turns
+     expiry work into a fixed tax per second regardless of keyspace size; leftover expired
+     keys simply wait for later ticks (and remain invisible to readers meanwhile, since every
+     read path checks the deadline anyway).</p>
+
+  <h3>D6: Approximate LRU via a last-access stamp, not a linked list</h3>
+  <pre><code><span class="kw">func</span> (e *Engine) <span class="fn">evictIfNeededLocked</span>() {
+    <span class="kw">if</span> e.maxMemory &lt;= <span class="num">0</span> || e.policy != <span class="str">"lru"</span> { <span class="kw">return</span> }
+    <span class="kw">for</span> e.memUsed &gt; e.maxMemory &amp;&amp; len(e.data) &gt; <span class="num">0</span> {
+        victim, oldest := <span class="str">""</span>, time.<span class="typ">Time</span>{}
+        <span class="kw">for</span> k, ent := <span class="kw">range</span> e.data {
+            <span class="kw">if</span> victim == <span class="str">""</span> || ent.lastAccess.Before(oldest) {
+                victim, oldest = k, ent.lastAccess
+            }
+        }
+        e.<span class="fn">deleteLocked</span>(victim)
+    }
+}</code></pre>
+  <p>A true LRU needs an intrusive doubly-linked list plus a hash map, with pointer surgery on
+     every access. The approximate version stores a <code>lastAccess</code> timestamp per entry
+     (refreshed in <code>liveLocked</code>'s read path) and scans for the minimum when the
+     memory budget is exceeded — O(n) per eviction, but amortized across writes and perfectly
+     correct ordering. This is precisely Redis's own <code>volatile-lru</code>/
+     <code>allkeys-lru</code> approach: sample-and-evict approximately, spend the saved
+     complexity elsewhere. One documented limitation: entries restored by WAL replay all get
+     <code>lastAccess = open time</code>, so their pre-crash recency ordering is lost —
+     acceptable at teaching scope, worth knowing about.</p>
+
+  <h3>D7: Connection registration and WaitGroup counting under one lock</h3>
+  <pre><code>s.mu.Lock()
+<span class="kw">if</span> s.closed {
+    s.mu.Unlock()
+    c.<span class="fn">Close</span>()
+    <span class="kw">continue</span>
+}
+s.conns[c] = struct{}{}
+s.wg.<span class="fn">Add</span>(<span class="num">1</span>)
+s.mu.Unlock()
+<span class="kw">go</span> s.serveConn(c)</code></pre>
+  <p>The drain race, spelled out: <code>Shutdown</code> sets <code>closed = true</code>, then
+     waits on <code>wg.Wait()</code>. Suppose the accept loop checked <code>closed</code>
+     (false), then — before registering the connection — Shutdown ran to completion waiting
+     on a WaitGroup that didn't include this new goroutine yet, then the goroutine started
+     serving a client on a shut-down server. Registering the conn <em>and</em> bumping the
+     WaitGroup inside the same critical section as the <code>closed</code> check makes the
+     sequence atomic: any connection that survives the check is guaranteed counted before
+     <code>Wait</code> can observe the counter. It's the same Add-before-go discipline as any
+     WaitGroup use, hardened because the "go statement" sits behind an accept that can stall
+     indefinitely.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Why append-only logs beat in-place updates</h3>
+  <p>Updating a value in place means seeking to wherever it lives and rewriting it there —
+     which requires knowing where it lives (an index), handles growth badly (the new value may
+     not fit in the old hole), and turns every crash mid-update into a partially-overwritten,
+     unrecoverable record. Appending instead has three superpowers. <strong>Sequential
+     I/O</strong>: appends are the fastest thing a disk does, and the OS batches them well.
+     <strong>Crash atomicity by construction</strong>: a crash can only affect the very end of
+     the file — everything before the last incomplete record is intact by definition, which is
+     exactly the property the torn-tail recovery exploits. <strong>Replayability</strong>: the
+     log <em>is</em> the history of commands, so recovering state is "execute them again" —
+     the same trick as database replication and event sourcing. The cost is space (dead
+     versions accumulate until compaction) and read amplification on startup — both fine at
+     minikv's scale, both the reason real systems grow compaction and snapshots later.</p>
+
+  <h3>The torn-tail problem, and truncate-to-last-good-boundary</h3>
+  <p>Consider the crash: <code>wal.append</code> wrote the 4-byte length header and half the
+     payload when the power died. On reopen, <code>nextRecord</code> reads a valid header
+     announcing 40 bytes, then <code>io.ReadFull</code> returns <code>ErrUnexpectedEOF</code>
+     after 22. Three facts follow. First, this is <em>not necessarily corruption</em> — it's
+     the signature of "the last write never finished," an expected state in any append-only
+     system. Second, it's only detectable <em>at the tail</em>: the reader knows a record is
+     incomplete only because the file ended underneath it, so "torn tail" and "file was cut
+     here" are literally the same observation — there are no checksums or sequence numbers at
+     teaching scope to distinguish a crash from a shorter log. Third, recovery must repair the
+     file, not just the memory: dropping the torn record from the in-memory map isn't enough,
+     because the next append would otherwise land after the orphaned bytes and brick the log.
+     Hence <code>truncateTo(lastGood)</code> — and the regression test that proves the whole
+     cycle:</p>
+  <pre><code><span class="com">// TestTornTailRecoveryKeepsWALWritable: tear, recover, append, reopen.</span>
+e, _ := <span class="fn">NewEngine</span>(Config{WALPath: tornPath})      <span class="com">// replay truncates tail</span>
+st, _ := os.<span class="fn">Stat</span>(tornPath)
+<span class="kw">if</span> st.Size() != bounds[<span class="num">2</span>] { ... }                 <span class="com">// file ends at last good record</span>
+mustApply(t, e, op{<span class="str">"SET"</span>, []<span class="typ">string</span>{<span class="str">"post-crash"</span>, <span class="str">"written-after-recovery"</span>}})
+e.<span class="fn">Close</span>()
+
+e2, err := <span class="fn">NewEngine</span>(Config{WALPath: tornPath})   <span class="com">// MUST succeed</span>
+<span class="kw">if</span> _, ok := got[<span class="str">"r2"</span>]; ok {
+    t.<span class="fn">Fatal</span>(<span class="str">"torn record r2 resurrected after recovery"</span>)
+}</code></pre>
+  <p>The counterpart rule completes the picture: <strong>a torn tail is tolerated; damage
+     inside a complete record is fatal</strong>. <code>TestMidFileCorruptionIsError</code>
+     flips one byte of a mid-log command name and asserts construction fails loudly — silent
+     data damage must never masquerade as an interrupted write. The asymmetry is the whole
+     design: expected interruption recovers, unexpected mutation aborts.</p>
+
+  <h3>SyncEveryN — the durability-vs-throughput dial</h3>
+  <pre><code><span class="kw">func</span> (w *walFile) <span class="fn">append</span>(payload []<span class="typ">byte</span>) <span class="typ">error</span> {
+    w.f.<span class="fn">Write</span>(hdr[:]); w.f.<span class="fn">Write</span>(payload)  <span class="com">// reaches the OS immediately</span>
+    w.pending++
+    <span class="kw">if</span> w.syncEvery &gt; <span class="num">0</span> &amp;&amp; w.pending &gt;= w.syncEvery {
+        w.pending = <span class="num">0</span>
+        <span class="kw">return</span> w.f.<span class="fn">Sync</span>()               <span class="com">// fsync every N writes</span>
+    }
+    <span class="kw">return</span> <span class="kw">nil</span>
+}</code></pre>
+  <p>The key insight is that there are <em>two</em> distinct failure boundaries. A
+     <strong>process crash</strong> loses nothing here regardless of settings: the data passed
+     through <code>write(2)</code>, so the kernel holds it even though the process is gone.
+     Only a <strong>machine crash</strong> (power loss, kernel panic) exposes the gap between
+     the page cache and the disk — and that gap is exactly what <code>SyncEveryN</code>
+     prices. Mode 1 fsyncs after every write: each acknowledged write survives power loss, at
+     one disk-flush latency per write. Mode N batches: flush cost amortized over N writes, in
+     exchange for losing up to N−1 most recent writes in a crash. Mode 0 never syncs
+     explicitly: the kernel flushes on its own schedule — usually fine, formally unbounded.
+     Real databases expose the same knob under other names (PostgreSQL's
+     <code>synchronous_commit</code>, Redis's <code>appendfsync everysec</code>); the test
+     suite runs all three modes through close/reopen so the semantics, not just the flag, are
+     pinned.</p>
+
+  <h3>The write-cursor invariant: O_RDWR without O_APPEND</h3>
+  <pre><code>f, err := os.<span class="fn">OpenFile</span>(cfg.WALPath, os.O_CREATE|os.O_RDWR, <span class="num">0o644</span>)
+...
+r := bufio.<span class="fn">NewReader</span>(e.wal.f)   <span class="com">// replay reads through the SAME handle</span></code></pre>
+  <p>The reflexive choice for a log file is <code>O_APPEND</code> — every write atomically
+     lands at end-of-file, cursor worries vanish. But minikv deliberately doesn't use it,
+     because replay must read through the <em>same</em> file handle, and reading moves the
+     shared cursor. The invariant to maintain: <strong>after replay finishes, the cursor sits
+     exactly at the append point.</strong> A clean replay naturally satisfies this — the
+     buffered reader consumed to EOF. The torn-tail path breaks it — truncation rewinds the
+     file below where the reader stopped — which is why <code>truncateTo</code> explicitly
+     <code>Seek</code>s back to <code>lastGood</code>. Understanding this invariant is the
+     point of the exercise: with <code>O_APPEND</code> the invariant is maintained
+     <em>for</em> you and you'd never learn it exists. (The trade-off: a single handle means
+     replay and append can't overlap — irrelevant here, since both happen under
+     <code>e.mu</code>.)</p>
+
+  <h3>Bounded sweep work: making worst-case cost independent of keyspace</h3>
+  <p>Background loops have a nasty failure mode: the code is correct, but its cost scales with
+     data, so the day the dataset grows 100×, every timer tick becomes a hundred-millisecond
+     lock-holding scan and p99 latency quietly doubles. The defense is structural, not
+     tuning: cap the work per invocation (<code>maxSweepScan = 128</code> entries examined per
+     tick) so the per-tick worst case is constant, and rely on the invariant that correctness
+     never depends on the sweeper's speed — lazy expiry guarantees no reader ever observes an
+     expired value, so a backlog of expired keys wastes memory but breaks nothing. This
+     division (bounded active cleanup + always-correct lazy path) is the same shape Redis
+     uses for its <code>ACTIVE_EXPIRE_CYCLE</code>, and the same reasoning behind Go's own
+     incremental GC: do a little work often rather than all the work rarely.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Byte-exact protocol assertions over real TCP</h3>
+  <p>The protocol tests don't parse replies and compare fields — they compare
+     <em>bytes</em>. <code>sendAndExpect</code> writes a hand-built RESP array
+     (<code>respBulk("GET", "foo")</code> → <code>*2\r\n$3\r\nGET\r\n$3\r\nfoo\r\n</code>) and
+     asserts the reply is exactly <code>$4\r\nbar2\r\n</code>, terminator included. Byte
+     exactness matters because RESP compatibility is a byte-level contract: a client library
+     that expects <code>\r\n</code> won't forgive <code>\n</code>, and <code>$-1</code> versus
+     <code>$0\r\n\r\n</code> is the difference between "missing key" and "empty string." The
+     suite also walks the unhappy paths as wire cases: <code>FROB</code> yields
+     <code>-ERR unknown command 'FROB'\r\n</code>, a lone key yields the arity error, and —
+     the M3 regression — a claimed 2 GB bulk length yields exactly
+     <code>-ERR protocol error\r\n</code> with no allocation attempted.</p>
+
+  <h3>WAL replay identity: state as a snapshot equality</h3>
+  <p><code>TestWALReplayIdenticalState</code> defines durability operationally: apply 100
+     deterministic mixed operations (seeded RNG, so failures reproduce), capture the full
+     observable state via <code>Keys()</code> + <code>Get()</code>, close, reopen, and demand
+     the same keys, the same values, and the same cardinality. The op generator plants a
+     literal <code>"line1\r\nline2 with  spaces"</code> value in the very first op — if any
+     framing layer (wire or WAL) used delimiters instead of counts, this value destroys it
+     immediately. Replay identity is the strongest single assertion a WAL can face: it
+     subsumes framing, ordering, expiry encoding, and error handling in one comparison.</p>
+
+  <h3>The per-byte torn-tail sweep</h3>
+  <pre><code><span class="com">// Truncate at every record boundary AND at boundary-1 (mid-header).</span>
+points := map[<span class="typ">int64</span>]<span class="typ">bool</span>{}
+<span class="kw">for</span> _, p := <span class="kw">range</span> bounds {
+    points[p] = <span class="kw">true</span>
+    <span class="kw">if</span> p &gt; <span class="num">0</span> { points[p-<span class="num">1</span>] = <span class="kw">true</span> }   <span class="com">// cut inside the length prefix</span>
+}
+<span class="kw">for</span> p := <span class="kw">range</span> points {
+    t.<span class="fn">Run</span>(fmt.<span class="fn">Sprintf</span>(<span class="str">"trunc-%d"</span>, p), ...)
+}</code></pre>
+  <p>Most crash tests sample one unlucky truncation point and hope. This suite enumerates
+     <em>every</em> possible cut: while building the log it records the exact file size after
+     each apply (the record boundaries), then generates a subtest per boundary <em>plus</em>
+     per boundary−1, which slices through a length prefix — the sneakiest case, where a
+     half-header must be recognized as torn rather than parsed as an enormous bogus length.
+     Each subtest asserts the complete-prefix property independently: the surviving keys are
+     precisely those whose records fit entirely within the cut. Exhaustive coverage converts
+     "we tested crashing" into "we proved recovery for every reachable crash point."</p>
+
+  <h3>Crash simulation without a crash</h3>
+  <p>You can't <code>kill -9</code> your own unit test usefully, so the engine ships a
+     test-only hook that approximates it faithfully where it matters:</p>
+  <pre><code><span class="kw">func</span> (e *Engine) <span class="fn">kill</span>() {   <span class="com">// simulate a process crash</span>
+    e.closeOnce.Do(func() {
+        close(e.stop); &lt;-e.sweepDone
+        e.mu.Lock(); <span class="kw">defer</span> e.mu.Unlock()
+        <span class="kw">if</span> e.wal != <span class="kw">nil</span> { e.wal.f.<span class="fn">Close</span>() }   <span class="com">// no Sync(), no truncate</span>
+    })
+}</code></pre>
+  <p><code>Close</code> fsyncs and closes; <code>kill</code> abandons the handle after closing
+     the descriptor — skipping exactly the steps that would mask the bug under test. Combined
+     with copying the WAL bytes to a fresh path mid-run, tests can construct "crashed at an
+     arbitrary moment" files at will: fully written (<code>TestCrashConsistency</code>), torn
+     by three bytes, cut at any boundary. The hook being unexported keeps the public API
+     honest — production callers get only <code>Close</code>.</p>
+
+  <h3>TTL-shrink assertion across reopen (the I1 regression)</h3>
+  <p><code>TestWALExpiryIsAbsolute</code> catches the subtlest bug in the project. Set a key
+     with <code>EX 5</code>, sleep 1.2s, kill, copy the WAL, reopen: the naive implementation
+     that logged <code>EX 5</code> replays a fresh 5-second deadline and the test fails with
+     "TTL after reopen = 5s; want shrunk remainder in [2,4]s." The assertion window
+     (<code>[2,4]</code> rather than <code>==4</code>) tolerates scheduling jitter while still
+     being unreachable by a reset clock. A second leg then reopens cleanly and asserts the
+     deadline can only shrink (<code>d2 &gt; d</code> fails) — covering the case where a
+     buggy implementation happens to preserve absolute deadlines on crash replay but resets
+     them on the clean path. One behavior, both entry points, both pinned.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <ul>
+      <li><strong>Redis itself</strong> — minikv's blueprint. Redis persists via an append-only
+          file (AOF) of the same commands you log, rewrites relative expiries into absolute
+          timestamps during AOF rewrite (minikv's EXAT trick, permanently), and expires keys
+          with the same lazy-plus-sampled-active combination you built. Even the protocol
+          error path matches: Redis answers oversized or malformed frames with a protocol
+          error and drops the connection.</li>
+      <li><strong>etcd / raft WALs</strong> — etcd's Raft log is a length-framed append-only
+          file where torn-tail handling is a correctness requirement: a partially written last
+          entry is discarded on recovery, exactly your <code>truncateTo(lastGood)</code>. The
+          lineage runs straight back through WAL literature to PostgreSQL and SQLite.</li>
+      <li><strong>bbolt and pebble</strong> — Go's flagship embedded storage engines. bbolt
+          (etcd's former default backend) is a B+tree with copy-on-write pages and strict
+          fsync discipline; pebble (CockroachDB's store) is a modern LSM whose WAL uses
+          length-prefixed records with checksummed fragments and the same
+          truncate-on-recovery logic. Both exist because teams needed Go-native answers to
+          the exact problems this project introduces.</li>
+      <li><strong>group commit everywhere</strong> — your <code>SyncEveryN</code> counter is a
+          single-process sketch of group commit: batching multiple logical writes into one
+          expensive fsync. PostgreSQL, MySQL's InnoDB, Kafka's producer acks, and etcd all
+          sell the same tradeoff under different names.</li>
+    </ul>
+  </div>
+
+  <h3>Why Go owns this territory</h3>
+  <ol>
+    <li><strong>The stdlib reaches down to the bytes.</strong> <code>os.File</code> gives you
+        <code>Write</code>, <code>Sync</code>, <code>Truncate</code>, and <code>Seek</code>
+        without cgo or FFI; <code>encoding/binary</code> gives you portable big-endian
+        framing; <code>net</code> gives you a production TCP listener. Building a storage
+        engine in Go is a weekend project, not a systems-programming apprenticeship — which
+        is why the ecosystem sprouted bbolt, pebble, badger, and dgraph's Ristretto in under
+        a decade.</li>
+    <li><strong>Goroutine-per-connection suits stateful servers.</strong> A key/value server
+        holds per-client session state (here: a buffered reader mid-command), and blocking
+        reads on a dedicated goroutine model that far more naturally than event-loop
+        callbacks. Thousands of idle client connections cost kilobytes each — the reason
+        Go's networking model keeps showing up in proxies, caches, and databases.</li>
+    <li><strong>fsync dominates, so language overhead doesn't.</strong> A disk flush costs
+        1–10ms; the Go runtime around it costs microseconds. When durability is the
+        bottleneck, the performance conversation is about <em>batching strategy</em> —
+        group commit, <code>O_DSYNC</code> vs explicit sync, sync-on-close — not about
+        language speed. That inverts the usual low-latency calculus and makes Go's
+        convenience essentially free in this domain.</li>
+  </ol>
+  <p>The through-line: length-prefixed appends, prefix-decodable framing, torn-tail
+     truncation, absolute expiry encoding, and a durability dial are not teaching simplifications —
+     they are, verbatim, the core mechanisms of Redis AOF, Raft logs, and pebble's WAL.
+     You've now built each one small enough to fully understand, which is the only reliable
+     way to ever trust them at scale.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="09-metricsd.html">&larr; Previous: metricsd</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 10 of 16</span>
+  <a class="btn" href="11-tagforge.html">Next: tagforge &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
