@@ -114,6 +114,11 @@ func TestPersistenceAcrossReopen(t *testing.T) {
 	if _, err := s.Add("and me"); err != nil {
 		t.Fatalf("Add error = %v", err)
 	}
+	// Mutate status before reopening so Status and DoneAt persistence through
+	// a real save/load cycle is covered too, not just title/timestamps.
+	if err := s.SetStatus(1, StatusDone); err != nil {
+		t.Fatalf("SetStatus error = %v", err)
+	}
 
 	reopened, err := OpenStore(path)
 	if err != nil {
@@ -128,6 +133,12 @@ func TestPersistenceAcrossReopen(t *testing.T) {
 	}
 	if got[0].ID != first.ID || got[0].Title != first.Title || !got[0].CreatedAt.Equal(first.CreatedAt) {
 		t.Errorf("after reopen got[0] = %+v, want %+v", got[0], first)
+	}
+	if got[0].Status != StatusDone {
+		t.Errorf("after reopen Status = %q, want %q", got[0].Status, StatusDone)
+	}
+	if got[0].DoneAt == nil {
+		t.Error("after reopen DoneAt = nil, want non-nil")
 	}
 }
 

@@ -100,20 +100,22 @@ func arg(args []string) string {
 	return args[2]
 }
 
-// errorsIsNotFound reports whether err wraps the solution package's
-// ErrNotFound sentinel.
+// storePath returns the store file location: TASKLINE_FILE if set, else
+// ~/.taskline.json.
 func storePath() string {
 	if p := os.Getenv("TASKLINE_FILE"); p != "" {
 		return p
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fatal(fmt.Errorf("resolve home directory: %w", err))
+		fatal(fmt.Errorf("taskline: resolve home directory: %w", err))
 	}
 	return filepath.Join(home, ".taskline.json")
 }
 
+// fatal reports err to stderr and exits 1. Library errors already carry the
+// "taskline: " prefix; non-library call sites must add it themselves.
 func fatal(err error) {
-	fmt.Fprintln(os.Stderr, "taskline:", err)
+	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)
 }

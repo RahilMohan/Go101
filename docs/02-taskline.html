@@ -367,13 +367,22 @@
   <h3>D2: Whole-file rewrite, always</h3>
   <p>Every mutation follows the same shape: <code>List()</code> → modify the slice →
      <code>save(tasks)</code> serializes the entire array and replaces the file. An append-log
-     would write fewer bytes but buys three problems: recovery logic to replay partial logs,
-     compaction to bound growth, and ordering hazards if two writers race. Rewriting the whole
-     file has none of those failure modes — the file's contents after any successful save are
-     definitionally consistent, because they were produced by one <code>json.MarshalIndent</code>
-     of one coherent slice. Correctness-by-construction beats incremental cleverness here, which
-     is precisely the trade real databases eventually make too (checkpointing is a whole-file
-     snapshot wearing a suit).</p>
+     would write fewer bytes but buys two problems: recovery logic to replay partial logs, and
+     compaction to bound growth. Rewriting the whole file avoids both — the file's contents after
+     any successful save are definitionally consistent, because they were produced by one
+     <code>json.MarshalIndent</code> of one coherent slice.</p>
+  <p>But be clear about what this design does <em>not</em> buy you: it assumes a
+     <strong>single writer at a time</strong>. There is no locking. Each operation is
+     read-modify-write-rename, so two concurrent writers each read the same snapshot, apply their
+     own change, and rename over the file in turn — the second rename silently discards the
+     first writer's update (last-writer-wins). Run thirty <code>taskline add</code> processes at
+     once and you end up with a one-task store and zero errors. The temp+rename dance guarantees
+     readers never see a torn or half-written file; it says nothing about lost updates. If you
+     need multi-writer safety, that's what file locks (<code>syscall.Flock</code>) or real
+     databases are for — deliberately out of scope for a zero-dependency lesson. Correctness-by-
+     construction within one writer beats incremental cleverness here, which is precisely the
+     trade real databases eventually make too (checkpointing is a whole-file snapshot wearing a
+     suit).</p>
 
   <h3>D3: Temp file + rename = atomicity</h3>
   <pre><code>tmp, err := os.<span class="fn">CreateTemp</span>(filepath.<span class="fn">Dir</span>(s.path), <span class="str">".taskline-*.tmp"</span>)
@@ -503,7 +512,7 @@ DoneAt    *<span class="typ">time.Time</span> `json:<span class="str">"done_at,o
      unconditionally, and the test suite enforces non-nil explicitly.</p>
 
   <h3>time.Time marshals itself</h3>
-  <pre><code>first.CreatedAt.Equal(first.CreatedAt) <span class="com">// tests use .Equal, not ==</code></pre>
+  <pre><code><span class="kw">if</span> got[<span class="num">0</span>].ID != first.ID || !got[<span class="num">0</span>].CreatedAt.<span class="fn">Equal</span>(first.CreatedAt) { <span class="com">// .Equal, not ==</span></code></pre>
   <p><code>time.Time</code> implements <code>json.Marshaler</code>: it serializes to RFC 3339 —
      <code>"2026-08-25T14:03:00.123456789+02:00"</code> — and unmarshals back losslessly,
      including timezone. That's why <code>TestPersistenceAcrossReopen</code> can assert an exact
