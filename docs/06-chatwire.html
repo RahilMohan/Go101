@@ -303,8 +303,8 @@
     <li><strong>Connection lifecycle ownership.</strong> With HTTP, the runtime hides the
         connection; here you own every stage — accept, handshake, register, stream, teardown —
         and must answer for each: who closes the listener? Who closes each conn? What happens
-        to a reader blocked on a dead peer? The answers (listener closed by Shutdown, writer
-        goroutine is sole closer after registration, closing the conn interrupts everything)
+        to a reader blocked on a dead peer? The answers (listener closed by Shutdown, only
+        the hub closes <code>out</code> channels, closing the conn interrupts everything)
         form a discipline that transfers to every network server you'll ever write.</li>
     <li><strong>Channel-ownership patterns.</strong> One hub goroutine owns the client registry
         and subscriber set; all mutation flows through request channels. There are no mutexes on
@@ -428,9 +428,14 @@ s.wg.<span class="fn">Add</span>(<span class="num">1</span>)
      <strong>writer</strong> goroutine draining its private 64-slot <code>out</code> queue
      onto the socket. The hub sits between them, moving lines from readers' events to
      writers' queues. Three rules make the topology safe: the reader never touches the conn
-     once registered; the writer is the <em>sole closer</em> of the connection after
-     registration; and the only channel either side closes is its own. Ownership is total,
-     so races are structurally impossible rather than merely avoided.</p>
+     once registered; only the hub closes any client's <code>out</code> channel; and in the
+     graceful path the writer is who closes the connection — though it is not the
+     <em>only</em> possible closer, because the hub's eviction path and Shutdown's
+     force-close also close conns directly (see D3 and D5). The invariant that actually
+     prevents races is about channels, not sockets: exactly one owner per <code>out</code>
+     channel, so no send-on-closed panic is possible, and double-closing a conn — which the
+     multiple closers make routine — is harmless by design. Ownership is deliberate, so
+     races are structurally impossible rather than merely avoided.</p>
 
   <h3>D3: Drop-on-full vs block-and-wait — two backpressure policies</h3>
   <pre><code><span class="com">// To a client's write queue: DROP on full — never stall the room</span>
@@ -555,9 +560,12 @@ Shutdown         <span class="com">→ &lt;-doneCh ⇒ return nil | &lt;-ctx.Don
      handshake window (60 seconds here, so pre-registration conns can't linger forever), and
      is then cleared with <code>time.Time{}</code> so registered users may idle indefinitely.
      Most importantly, <code>conn.Close()</code> works from <em>another goroutine</em>: it's
-     how the hub evicts a slow client and how force-close unblocks wedged writers — which is
-     why &ldquo;who owns the right to close&rdquo; must be answered explicitly. Here the answer is:
-     the writer goroutine, alone.</p>
+      how the hub evicts a slow client and how force-close unblocks wedged writers — which is
+      why &ldquo;who may close, and when&rdquo; must be answered explicitly rather than left to
+      convention. In chatwire the answer has two parts: the writer goroutine performs the
+      close in every graceful drain, while the hub (eviction) and force-close (shutdown
+      deadline) may close a conn out from under anyone at any time — safe precisely because
+      closing an already-closed conn is a no-op and channel closure stays hub-exclusive.</p>
 
   <h3>select as multiplexer — one goroutine, many conversations</h3>
   <pre><code><span class="kw">select</span> {
@@ -590,7 +598,8 @@ Shutdown         <span class="com">→ &lt;-doneCh ⇒ return nil | &lt;-ctx.Don
      channel simply misses events when full. Cheap, silent, lossy — appropriate when
      observations are advisory. A <strong>slow client</strong> is a remote peer whose socket
      has stopped draining: buffering can't save it, so the server severs the relationship —
-     queue closed, conn closed, room notified of the departure. Between them sits the
+     queue closed, conn closed — and no farewell is sent: eviction is deliberately silent,
+     with no leave or system event emitted, not even to subscribers. Between them sits the
      <strong>fast talker</strong> case, handled by blocking instead: a client flooding
      <code>eventCh</code> waits for the hub, converting excess enthusiasm into latency rather
      than loss. Three consumer archetypes, three policies, one invariant throughout: the hub
@@ -699,7 +708,8 @@ time.<span class="fn">Sleep</span>(<span class="num">2</span> * settle)
      full lifecycle is never benign.</p>
 
   <h3>The -count=2 -race flake protocol</h3>
-  <pre><code>go test -race -count=2 ./projects/06-chatwire/...</code></pre>
+  <pre><code><span class="com"># each project is its own Go module — run from inside the project:</span>
+cd projects/06-chatwire &amp;&amp; go test -race -count=2 ./...</code></pre>
   <p>Concurrency bugs are probabilistic, so proving their absence requires repetition:
      <code>-count=2</code> runs the suite twice in one process, multiplying exposure to
      interleaving luck, and <code>-race</code> instruments every memory access to catch races
