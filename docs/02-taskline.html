@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 02 — taskline</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible) */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal:nth-of-type(odd) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>taskline</h1>
+  <p class="subtitle">Go101 · Project 02 — a persistent TODO manager CLI</p>
+  <div class="badge-row">
+    <span class="badge tier">Beginner Tier</span>
+    <span class="badge">Structs &amp; methods</span>
+    <span class="badge">JSON tags</span>
+    <span class="badge">Slices vs maps</span>
+    <span class="badge">time.Time</span>
+    <span class="badge">Atomic file writes</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: pure standard library, again</h3>
+  <p>taskline uses three load-bearing stdlib packages — <code>encoding/json</code>, <code>time</code>,
+     and <code>os</code> — plus small helpers (<code>errors</code>, <code>fmt</code>,
+     <code>path/filepath</code>). No database driver, no storage engine, no CLI framework,
+     no <code>go.sum</code>. Where project 01 proved you can build a real tool with nothing
+     imported, project 02 proves something harder to believe until you've done it:
+     <strong>persistent state doesn't require a database</strong>.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in taskline</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>encoding/json</code></td><td>Serialize/deserialize the whole task list as a JSON array</td><td>Struct tags as declarative metadata; round-tripping your own types</td></tr>
+      <tr><td><code>time</code></td><td><code>CreatedAt</code>/<code>DoneAt</code> timestamps</td><td><code>time.Time</code> has built-in JSON marshaling — timestamps survive a save/load cycle exactly</td></tr>
+      <tr><td><code>os</code></td><td><code>CreateTemp</code>, <code>Rename</code>, <code>ReadFile</code>, env vars in the CLI</td><td>Atomic writes via temp file + rename; files as the simplest durable store</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>boltDB / SQLite (via CGo or pure-Go ports)</strong> — both are excellent embedded
+        stores used by real tools (<code>etcd</code> runs on boltDB). But they drag storage-engine
+        mechanics — B-trees, pages, transactions, cursors — into a lesson about structs and JSON.
+        The engine would dominate the codebase and drown the actual teaching content. When a later
+        project needs indexed or concurrent access, one of these returns and its value will be obvious.</li>
+    <li><strong>Third-party CLI frameworks (cobra et al.)</strong> — taskline's five subcommands are
+        a plain <code>switch</code> over <code>os.Args[1]</code>: ~30 lines, fully transparent.
+        A framework would add a dependency tree to hide logic this small.</li>
+    <li><strong>An append-only log file</strong> — writing one line per mutation avoids full rewrites
+        but introduces replay/recovery/compaction concerns: exactly the complexity budget this
+        project refuses to spend (see D2).</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Struct tags as metadata.</strong> One backquoted string per field controls how Go
+        structs become JSON and back — your first taste of reflection-driven programming without
+        writing any reflection yourself.</li>
+    <li><strong>Atomic file writes.</strong> The temp-file-then-rename dance is the same pattern
+        databases, editors, and package managers use under different names. Learning it on a
+        40-line <code>save()</code> makes the idea permanent.</li>
+    <li><strong>The zero-dependency philosophy.</strong> A single static binary storing its data in
+        one human-readable file is a legitimate production design for countless tools — not just a
+        teaching simplification. Knowing when the stdlib suffices is itself an engineering skill.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>taskline_test.go</code> at the project root — the executable
+     specification. If your implementation passes these tests, it satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Add creates tasks with sequential IDs.</strong> Each <code>Add(title)</code>
+        assigns ID = index&nbsp;+&nbsp;1 within a run, sets status <code>todo</code>, records a
+        non-zero, monotonically non-decreasing <code>CreatedAt</code>, and leaves
+        <code>DoneAt</code> nil. Unicode titles like <code>"fika ☕ med kanelbulle"</code> work unchanged.</li>
+    <li><strong>R2 — List reflects stored tasks.</strong> After adding N tasks,
+        <code>List()</code> returns N tasks whose IDs, titles, statuses, and
+        <code>CreatedAt</code> values match what was added (comparing times with
+        <code>Equal</code>, since time equality isn't simple field comparison).</li>
+    <li><strong>R3 — Missing store reads as empty, not error.</strong> A never-written file yields
+        an empty, <em>non-nil</em> slice from <code>List()</code> — so callers can range over it
+        safely. Same for an existing-but-empty file.</li>
+    <li><strong>R4 — State survives reopen.</strong> Tasks added through one <code>Store</code>
+        must be visible through a second <code>OpenStore(path)</code> pointed at the same file —
+        including exact <code>CreatedAt</code> values after a JSON round-trip.</li>
+    <li><strong>R5 — SetStatus mutates persisted state.</strong> After <code>SetStatus(id, doing)</code>,
+        the raw file parses as valid JSON containing the task with the new status.</li>
+    <li><strong>R6 — Unknown IDs return ErrNotFound.</strong> Both <code>SetStatus</code> and
+        <code>Remove</code> fail with errors satisfying <code>errors.Is(err, ErrNotFound)</code>.</li>
+    <li><strong>R7 — Remove deletes only the target.</strong> After removing ID 1 of two, only
+        ID 2 remains — and the next Add gets ID <em>3</em>, not 1 (see D4 for why that's correct).</li>
+    <li><strong>R8 — Corrupt store surfaces an error.</strong> A file containing garbage makes
+        every operation fail with a decode error — never panic, never silently reset data.</li>
+    <li><strong>R9 — DoneAt tracks Status.</strong> Fresh tasks have nil <code>DoneAt</code>;
+        marking done sets it (≥ CreatedAt); moving away from done clears it again.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Atomic persistence.</strong> Every mutation leaves the store file either
+        fully old or fully new — never truncated or half-updated, even if the process dies mid-write.
+        The atomic-rename test verifies the file still parses after mutation.</li>
+    <li><strong>NF2 — Errors wrap, don't erase.</strong> Domain sentinels (<code>ErrNotFound</code>)
+        and I/O failures travel up the call chain wrapped with context, checkable via
+        <code>errors.Is</code> at the boundary where the CLI turns them into messages and exit codes.</li>
+    <li><strong>NF3 — Human-inspectable format.</strong> The store is indented JSON
+        (<code>MarshalIndent</code>) — openable, diffable, and editable by hand, which matters more
+        than compact bytes at this scale.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Store as a path plus behavior</h3>
+  <pre><code><span class="kw">type</span> <span class="typ">Store</span> <span class="kw">struct</span> {
+    path <span class="typ">string</span>
+}
+
+<span class="kw">func</span> <span class="fn">OpenStore</span>(path <span class="typ">string</span>) (*<span class="typ">Store</span>, <span class="typ">error</span>) {
+    <span class="kw">if</span> path == <span class="str">""</span> {
+        <span class="kw">return</span> <span class="kw">nil</span>, fmt.<span class="fn">Errorf</span>(<span class="str">"taskline: empty store path"</span>)
+    }
+    <span class="kw">return</span> &amp;<span class="typ">Store</span>{path: path}, <span class="kw">nil</span>
+}</code></pre>
+  <p>The entire persistent layer is one unexported string. No open handles, no caches, no locks:
+     each method reads fresh from disk, computes, and writes back. That's a deliberate constraint —
+     statelessness makes the store trivially testable (reopen freely, inspect the raw file between
+     calls) and eliminates a whole category of stale-cache bugs. The cost is re-reading the file on
+     every operation, which is irrelevant at human TODO-list scale and honest about what this design is.
+     Note the pointer receiver throughout: <code>*Store</code> methods mutate shared disk state, and
+     returning <code>&amp;Store{...}</code> is the constructor idiom Go uses instead of class constructors.</p>
+
+  <h3>D2: Whole-file rewrite, always</h3>
+  <p>Every mutation follows the same shape: <code>List()</code> → modify the slice →
+     <code>save(tasks)</code> serializes the entire array and replaces the file. An append-log
+     would write fewer bytes but buys three problems: recovery logic to replay partial logs,
+     compaction to bound growth, and ordering hazards if two writers race. Rewriting the whole
+     file has none of those failure modes — the file's contents after any successful save are
+     definitionally consistent, because they were produced by one <code>json.MarshalIndent</code>
+     of one coherent slice. Correctness-by-construction beats incremental cleverness here, which
+     is precisely the trade real databases eventually make too (checkpointing is a whole-file
+     snapshot wearing a suit).</p>
+
+  <h3>D3: Temp file + rename = atomicity</h3>
+  <pre><code>tmp, err := os.<span class="fn">CreateTemp</span>(filepath.<span class="fn">Dir</span>(s.path), <span class="str">".taskline-*.tmp"</span>)
+<span class="com">// ...write, Sync, Close...</code>
+<span class="kw">if</span> err := os.<span class="fn">Rename</span>(name, s.path); err != <span class="kw">nil</span> {
+    os.<span class="fn">Remove</span>(name)
+    <span class="kw">return</span> fmt.<span class="fn">Errorf</span>(<span class="str">"rename over %s: %w"</span>, s.path, err)
+}</code></pre>
+  <p>Writing directly to <code>tasks.json</code> risks leaving a truncated file if the process
+     crashes mid-write. Instead: write the complete new content to a temp file <em>in the same
+     directory</em> (same-directory matters — <code>rename</code> is only atomic within one
+     filesystem), flush it with <code>Sync</code>, close it, then <code>os.Rename</code> it over
+     the target. Rename is atomic at the OS level: readers see either the old inode or the new
+     one, never a hybrid. Every failure path cleans up the abandoned temp file. This is the same
+     guarantee editors implement when they save your file, and the seed of what databases call
+     a commit.</p>
+
+  <h3>D4: IDs are max(existing)+1 — and what that implies</h3>
+  <pre><code>max := <span class="num">0</span>
+<span class="kw">for</span> _, t := <span class="kw">range</span> tasks {
+    <span class="kw">if</span> t.ID &gt; max { max = t.ID }
+}
+task := <span class="typ">Task</span>{ID: max + <span class="num">1</span>, <span class="com">/* ... */</span>}</code></pre>
+  <p>No counter lives in the Store, because the Store holds no state — the file <em>is</em> the
+     state. So new IDs derive from the current contents: highest existing ID plus one. The
+     consequence, pinned by <code>TestRemoveDeletesTask</code>: after removing ID 1 from
+     <code>{1, 2}</code>, the next Add gets ID 3, <em>not</em> recycled ID 1. Freed IDs are reused
+     only once all higher IDs are gone. That's the right trade for a file-backed store — it keeps
+     allocation deterministic from file contents alone — and it mirrors how users think: a removed
+     task's ID shouldn't silently reappear attached to something else.</p>
+
+  <h3>D5: DoneAt stays consistent with Status</h3>
+  <pre><code>tasks[i].Status = st
+<span class="kw">if</span> st == StatusDone {
+    now := time.<span class="fn">Now</span>()
+    tasks[i].DoneAt = &amp;now
+} <span class="kw">else</span> {
+    tasks[i].DoneAt = <span class="kw">nil</span>
+}</code></pre>
+  <p><code>DoneAt</code> is a derived fact, not independent state: it's set exactly when a task
+     transitions to <code>done</code> and cleared on <em>any</em> other status. Letting them drift
+     — a task marked <code>doing</code> still carrying a completion timestamp — would poison every
+     report built on the data, so SetStatus enforces the invariant on every write rather than
+     hoping callers remember. Two details worth studying: <code>DoneAt</code> is a
+     <code>*time.Time</code> because Go has no tri-state bool — nil is the only way to say
+     "never"; and <code>now</code> is captured in a local before taking its address, because
+     <code>&amp;time.Now()</code> won't compile (you can't take the address of a return value).
+     <code>TestDoneAtLifecycle</code> walks the full todo → done → doing arc to lock the rule in.</p>
+
+  <h3>D6: Library core, thin command shell</h3>
+  <pre><code>projects/02-taskline/
+├── taskline.go             <span class="com"># package taskline — stubs you implement</span>
+├── taskline_test.go        <span class="com"># the executable spec</span>
+└── solution/
+    ├── solution.go         <span class="com"># package solution — Task, Store, ErrNotFound</span>
+    └── cmd/taskline/main.go   <span class="com"># subcommand wiring</span></code></pre>
+  <p>All persistence logic lives in the library package; <code>main</code> only dispatches
+     subcommands (<code>add/list/do/start/rm</code>), formats columns, maps
+     <code>errors.Is(err, ErrNotFound)</code> to friendly stderr output, and picks the store path
+     from <code>TASKLINE_FILE</code> (defaulting to <code>~/.taskline.json</code>). The split keeps
+     the interesting code process-free and unit-testable — the same library-plus-cmd layout as
+     project 01, now carrying state.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Structs and methods with receivers</h3>
+  <div class="callout">
+    <p><strong>The idea:</strong> a Go struct bundles related fields; a method attaches behavior
+    via a <em>receiver</em> — the parameter written before the method name. Value receivers work
+    on copies; pointer receivers share and can mutate.</p>
+  </div>
+  <pre><code><span class="kw">type</span> <span class="typ">Task</span> <span class="kw">struct</span> {
+    ID        <span class="typ">int</span>
+    Title     <span class="typ">string</span>
+    Status    <span class="typ">Status</span>
+    CreatedAt <span class="typ">time.Time</span>
+    DoneAt    *<span class="typ">time.Time</span>
+}
+
+<span class="kw">func</span> (s *<span class="typ">Store</span>) <span class="fn">SetStatus</span>(id <span class="typ">int</span>, st <span class="typ">Status</span>) <span class="typ">error</span></code></pre>
+  <p><code>Task</code> is pure data; <code>Store</code> owns behavior. Every Store method uses a
+     pointer receiver because they logically operate on the same underlying store — even though
+     <code>Store</code> contains only a string, using <code>*Store</code> signals "these methods
+     belong together, operating on one thing," and matches how Go reads idiomatic API design.
+     Notice also the named type <code>Status string</code>: three constants
+     (<code>StatusTodo</code>/<code>StatusDoing</code>/<code>StatusDone</code>) replace bare
+     strings, giving typos a compile-time home and IDEs something to autocomplete. This is Go's
+     type-safety sweet spot: no classes, no inheritance — just data plus functions with a
+     first argument spelled differently.</p>
+
+  <h3>JSON tags — metadata that drives code</h3>
+  <pre><code>ID        <span class="typ">int</span>        `json:<span class="str">"id"</span>`
+Title     <span class="typ">string</span>     `json:<span class="str">"title"</span>`
+CreatedAt <span class="typ">time.Time</span>  `json:<span class="str">"created_at"</span>`
+DoneAt    *<span class="typ">time.Time</span> `json:<span class="str">"done_at,omitempty"</span>`</code></pre>
+  <p>Those backquoted strings are <strong>struct tags</strong> — annotations the compiler stores
+     alongside each field and <code>encoding/json</code> reads at runtime via reflection. They're
+     a contract in miniature:</p>
+  <ul>
+    <li><code>json:"created_at"</code> renames the key in serialized output — Go convention says
+        <code>CreatedAt</code>, JSON convention says snake_case; tags translate.</li>
+    <li><code>,omitempty</code> drops <code>DoneAt</code> entirely when nil, so unfinished tasks
+        carry no misleading <code>"done_at": null</code> noise in the file.</li>
+    <li>Omit a tag and json falls back to the field name verbatim — usually wrong for cross-language
+        formats, which is why explicit tags everywhere is the disciplined habit.</li>
+  </ul>
+  <p>This is your first encounter with declarative metadata: you describe <em>what</em> the mapping
+     should be and a library figures out <em>how</em>. The same mechanism powers config parsing,
+     ORM column mappings, and Kubernetes' YAML-to-Go decoding — learn it here on ten lines and
+     you'll recognize it everywhere.</p>
+
+  <h3>Slices vs maps — the ordering tradeoff</h3>
+  <p>The natural alternative to <code>[]Task</code> is <code>map[int]Task</code> keyed by ID — O(1)
+     lookup, no linear scans in SetStatus/Remove. So why a slice? Because <code>List()</code> must
+     return tasks in insertion order, and <strong>Go map iteration order is deliberately
+     randomized</strong> — relying on it is a classic bug. With a slice, order is structural, not
+     reconstructed: the file is a JSON array, the decode produces an ordered slice, and
+     <code>List()</code> hands that ordering straight through. The costs are acceptable: finding a
+     task by ID is O(n) over a list sized in tens, and duplicate-ID prevention rests on the
+     max+1 discipline of D4. The general lesson: choose the structure whose <em>default iteration</em>
+     matches what you actually need to produce; convert to maps (or sort) at the edges where
+     lookup genuinely dominates. Note also the discipline in <code>List()</code>: missing files and
+     empty input return <code>[]Task{}</code>, never nil — callers can range over the result
+     unconditionally, and the test suite enforces non-nil explicitly.</p>
+
+  <h3>time.Time marshals itself</h3>
+  <pre><code>first.CreatedAt.Equal(first.CreatedAt) <span class="com">// tests use .Equal, not ==</code></pre>
+  <p><code>time.Time</code> implements <code>json.Marshaler</code>: it serializes to RFC 3339 —
+     <code>"2026-08-25T14:03:00.123456789+02:00"</code> — and unmarshals back losslessly,
+     including timezone. That's why <code>TestPersistenceAcrossReopen</code> can assert an exact
+     timestamp match after a save/load cycle with zero custom code: the round-trip is handled by
+     the type's own methods. The subtle part the tests teach: compare times with
+     <code>t.Equal(u)</code>, not <code>==</code> — two <code>time.Time</code> values can represent
+     the same instant with different monotonic-clock or location internals, making raw
+     <code>==</code> unreliable. And note <code>time.Now()</code>'s value includes a monotonic
+     reading that JSON strips away — another reason equality goes through the exported API.</p>
+
+  <h3>os.CreateTemp + os.Rename — the atomic pair</h3>
+  <pre><code>tmp, err := os.<span class="fn">CreateTemp</span>(dir, <span class="str">".taskline-*.tmp"</span>)  <span class="com">// unique name, O_EXCL create</span>
+tmp.<span class="fn">Sync</span>()                                        <span class="com">// force bytes to disk</span>
+tmp.<span class="fn">Close</span>()
+os.<span class="fn">Rename</span>(name, s.path)                            <span class="com">// atomic swap</span></code></pre>
+  <p><code>CreateTemp</code> solves the "safe scratch filename" problem correctly: it opens the
+     file with exclusive-create semantics, so no collision or symlink attack window exists, and
+     the <code>*</code> in the pattern becomes random characters. <code>Sync</code> matters because
+     <code>Write</code> reaching the OS buffer isn't durability — Sync forces the data to stable
+     storage before rename publishes it, so the renamed file is never empty-on-disk. Rename itself
+     replaces the destination atomically on POSIX and Windows alike. The choreography — create,
+     write, sync, close, rename, remove-on-any-error — is worth memorizing; it recurs whenever Go
+     code must update a file without ever exposing a torn version.</p>
+
+  <h3>Sentinel errors and errors.Is</h3>
+  <pre><code><span class="kw">var</span> ErrNotFound = errors.<span class="fn">New</span>(<span class="str">"taskline: task not found"</span>)
+
+<span class="kw">return</span> fmt.<span class="fn">Errorf</span>(<span class="str">"taskline: set status: %w"</span>, ErrNotFound)
+
+<span class="com">// at the CLI boundary:</span>
+<span class="kw">if</span> errors.<span class="fn">Is</span>(err, solution.ErrNotFound) {
+    fmt.<span class="fn">Fprintf</span>(os.Stderr, <span class="str">"taskline: no task with id %d\n"</span>, id)
+}</code></pre>
+  <p>A <em>sentinel</em> is a package-level error created once and compared against by identity.
+     Interior layers wrap it with context using <code>%w</code>; the outermost caller interrogates
+     with <code>errors.Is</code>, which unwraps through every layer until it finds the sentinel.
+     The payoff is visible in main.go's <code>do/start/rm</code> handler: user-facing "no task
+     with id %d" (exit 1) versus generic failure (exit 1 with the raw chain logged) — decided by
+     one <code>errors.Is</code>, with zero message-string matching anywhere. The same pattern
+     distinguishes "file doesn't exist yet" from real I/O trouble in <code>List()</code>, via the
+     standard library's own <code>fs.ErrNotExist</code> sentinel. Project 01 introduced wrapping;
+     this project is where you feel why: sentinels let libraries speak in codes while humans read
+     sentences.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Persistence means reopening, not just reading back</h3>
+  <p><code>TestPersistenceAcrossReopen</code> asserts the property that actually matters: data
+     written through one <code>Store</code> instance is readable through a <em>different</em>
+     instance constructed later from the same path.</p>
+  <pre><code>reopened, err := <span class="fn">OpenStore</span>(path)
+got, err := reopened.<span class="fn">List</span>()
+
+<span class="kw">if</span> got[<span class="num">0</span>].ID != first.ID || !got[<span class="num">0</span>].CreatedAt.<span class="fn">Equal</span>(first.CreatedAt) {
+    t.<span class="fn">Errorf</span>(<span class="str">"after reopen got[0] = %+v, want %+v"</span>, got[0], first)
+}</code></pre>
+  <p>Why reopen instead of calling <code>List()</code> on the original store? Because a broken
+     implementation could pass a naive test by keeping tasks in memory and skipping the file
+     entirely. Reopening forces the data through the full JSON serialize → write → read → decode
+     round-trip, catching tag mistakes, timestamp truncation, and encoding drift. It's the
+     difference between testing "the object remembers" and testing "the disk remembers" — only
+     the second is persistence.</p>
+
+  <h3>Corrupt input is a first-class test case</h3>
+  <pre><code>os.<span class="fn">WriteFile</span>(path, []<span class="typ">byte</span>(<span class="str">"{not json at all"</span>), <span class="num">0o644</span>)
+<span class="kw">if</span> _, err := s.<span class="fn">List</span>(); err == <span class="kw">nil</span> {
+    t.<span class="fn">Fatal</span>(<span class="str">"List() on corrupt file error = nil, want decode error"</span>)
+}</code></pre>
+  <p>The test hand-writes garbage directly into the store file — bypassing the API to simulate
+     the real world, where files get truncated by full disks, mangled by concurrent editors, or
+     half-migrated by older versions. The assertion is deliberately minimal: <em>an error must
+     occur</em>. That pins the safety contract — corrupt data never masquerades as an empty list
+     (which would let the next Add wipe the file), never panics — while leaving error message
+     wording free to evolve. Compare with <code>TestListMissingFileReturnsEmptyNonNilSlice</code>,
+     which draws the opposite conclusion from a different absence: missing file = empty store =
+     success; unreadable file = loud failure.</p>
+
+  <h3>errors.Is assertions on domain sentinels</h3>
+  <pre><code><span class="kw">if</span> err := s.SetStatus(<span class="num">99</span>, StatusDone); !errors.<span class="fn">Is</span>(err, ErrNotFound) {
+    t.<span class="fn">Errorf</span>(<span class="str">"SetStatus(99) error = %v, want errors.Is(err, ErrNotFound)"</span>, err)
+}</code></pre>
+  <p>Note what the test does <em>not</em> do: it doesn't compare <code>err == ErrNotFound</code>,
+     and it doesn't inspect strings. It demands the error <em>wraps</em> the sentinel — which
+     means the implementation must use <code>%w</code> somewhere between detection and return.
+     The test enforces the architecture, not just the outcome: get the right error the wrong way
+     (say, by formatting the message manually) and it fails. This is executable specification
+     at its sharpest — the wrapping discipline from Concept Walkthroughs exists because a test
+     refuses anything less.</p>
+
+  <h3>Lifecycle tests walk state transitions end to end</h3>
+  <p><code>TestDoneAtLifecycle</code> and <code>TestRemoveDeletesTask</code> are scenario tests:
+     add → transition → verify → transition back → verify again, checking the file (via a fresh
+     List) at each step rather than trusting return values alone. They exist because bugs love
+     transitions — the code path that sets DoneAt is easy; clearing it on the way
+     <em>back</em> is the part that rots. Meanwhile <code>mustOpen</code>'s use of
+     <code>t.TempDir()</code> gives every test a fresh directory auto-cleaned at test end —
+     parallel-safe isolation for free, no teardown boilerplate.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>A single static binary persisting structured state to a local file is one of the most
+       common shapes in the Go ecosystem:</p>
+    <ul>
+      <li><strong>Kubernetes API objects</strong> — every k8s resource (<code>Pod</code>,
+          <code>Deployment</code>) is a Go struct decoded from JSON/YAML via struct tags,
+          exactly like taskline's <code>Task</code> at infinitely larger scale.</li>
+      <li><strong>Docker configuration</strong> — <code>~/.docker/config.json</code> is read and
+          rewritten by the Docker CLI with <code>encoding/json</code>; registries speak the same
+          vocabulary.</li>
+      <li><strong>GitHub CLI</strong> (<code>gh</code>) — keeps auth tokens and preferences in a
+          JSON config file managed by the binary itself; taskline's TASKLINE_FILE-style
+          configuration is the same pattern.</li>
+      <li><strong>taskwarrior-style TODO CLIs</strong> — the entire genre of terminal task
+          managers stores tasks as line-oriented or JSON files in the home directory, for exactly
+          the reasons this project chose them: greppable, syncable, diffable, indestructibly simple.</li>
+      <li><strong>etcd's boltDB foundation</strong> — proof the rejected alternative is real:
+          when scale demands B-trees and transactions, Go reaches for embedded engines built
+          with Go itself.</li>
+    </ul>
+  </div>
+
+  <h3>Why encoding/json conquered the ecosystem</h3>
+  <ol>
+    <li><strong>Struct tags make schemas free.</strong> Any Go type becomes wire-format-ready with
+        a few annotations — no codegen, no schema language, no separate model layer. This lowered
+        the cost of "just expose that struct as JSON" so far that it became the default way Go
+        services, CLIs, and cloud APIs exchange data.</li>
+    <li><strong>The cloud runs on it.</strong> AWS SDKs, GCP clients, and effectively all of the
+        Kubernetes control plane marshal and unmarshal with <code>encoding/json</code> semantics.
+        Fluency in tags, omitempty, and round-trip quirks is table stakes for cloud engineering
+        in Go.</li>
+    <li><strong>Stdlib suffices until scale demands otherwise.</strong> File-based storage carries
+        real products surprisingly far — config, state, small datasets, single-user tools. The
+        escalation path (embedded KV store → client/server database) is well-marked, and knowing
+        <em>when</em> to climb it starts with having built the rung below: whole-file snapshots
+        with atomic commits are conceptually a checkpointing database, minus the concurrency.</li>
+  </ol>
+  <p>The through-line: structs-with-tags, atomic writes, and sentinel errors aren't toy-project
+     techniques. They're the daily vocabulary of every Go service talking to a cloud API and
+     every tool keeping state on your laptop — and this project exercises all three in under
+     200 lines.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="01-wordkit.html">&larr; Previous: wordkit</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 02 of 16</span>
+  <a class="btn" href="03-loglens.html">Next: loglens &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
