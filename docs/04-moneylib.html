@@ -362,7 +362,11 @@
   <h3>Non-functional</h3>
   <ul>
     <li><strong>NF1 — No floats, anywhere.</strong> Parsing, arithmetic, and rendering are exact
-        end to end; the string representation round-trips without information loss.</li>
+        end to end; the string representation round-trips through <code>ParseAmount</code> for every
+        Amount whose magnitude fits back into an int64 — everything except
+        <code>MinInt64</code>, which <code>String</code> renders faithfully
+        (<code>"-92233720368547758.08 USD"</code>) but <code>ParseAmount</code> correctly rejects as
+        out of range, since 2<sup>63</sup> exceeds <code>MaxInt64</code>.</li>
     <li><strong>NF2 — Errors wrap with context.</strong> The sentinel travels inside
         <code>fmt.Errorf("%w")</code> chains that name the offending operation and operands, so
         <code>errors.Is</code> checks survive while messages stay debuggable.</li>
@@ -415,8 +419,14 @@ a.<span class="fn">Currency</span>()    <span class="com">// Currency{"USD", 2} 
 }
 
 <span class="kw">var</span> (
+    <span class="com">// USD is United States dollar with two decimal places (cents).</span>
     USD = <span class="typ">Currency</span>{<span class="str">"USD"</span>, <span class="num">2</span>}
+    <span class="com">// EUR is Euro with two decimal places (cents).</span>
+    EUR = <span class="typ">Currency</span>{<span class="str">"EUR"</span>, <span class="num">2</span>}
+    <span class="com">// JPY is Japanese yen with no decimal places.</span>
     JPY = <span class="typ">Currency</span>{<span class="str">"JPY"</span>, <span class="num">0</span>}
+    <span class="com">// BHD is Bahraini dinar with three decimal places (fils), proving the</span>
+    <span class="com">// library generalizes beyond two-decimal currencies.</span>
     BHD = <span class="typ">Currency</span>{<span class="str">"BHD"</span>, <span class="num">3</span>}
 )</code></pre>
   <p>A string-only design would push exponent knowledge into every call site — every function
@@ -586,7 +596,7 @@ maxMag := <span class="typ">uint64</span>(math.<span class="typ">MaxInt64</span>
 
   <h3>Doc comments as the public API contract</h3>
   <pre><code>$ go doc -all ./solution | head -20
-<span class="com">package money // import "example.com/moneylib/solution"</span>
+<span class="com">package money // import "go101.dev/projects/04-moneylib/solution"</span>
 
 <span class="com">// Package money provides currency-safe monetary arithmetic using minor</span>
 <span class="com">// units, teaching integer-vs-float precision, table-driven tests, and</span>
@@ -598,7 +608,9 @@ maxMag := <span class="typ">uint64</span>(math.<span class="typ">MaxInt64</span>
      states the no-floats guarantee. <code>Amount</code>'s comment warns that the zero value is not
      a valid monetary amount. <code>String</code>'s comment promises canonical output with
      zero-padded fraction digits <em>so that String round-trips through ParseAmount</em> — turning
-     the fuzz property into published contract. <code>ParseAmount</code>'s comment enumerates the
+     the fuzz property into published contract (a promise that holds for every Amount except
+     <code>MinInt64</code>, whose rendered magnitude 2<sup>63</sup> cannot re-parse into a positive
+     int64, and which <code>ParseAmount</code> rightly rejects). <code>ParseAmount</code>'s comment enumerates the
      rejection rules, including the exact-digit requirement. Writing these comments first forces
      the design questions early ("what <em>does</em> Alloc do with −5?"), and the tests then exist
      to keep the documentation honest. Contract in prose, proof in code, confidence in the fuzzer.</p>
