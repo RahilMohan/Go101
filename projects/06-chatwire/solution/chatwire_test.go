@@ -97,17 +97,6 @@ func dial(t *testing.T, addr, name string) *testClient {
 	return &testClient{conn: conn, r: bufio.NewReader(conn)}
 }
 
-// readLine reads one server line with a deadline.
-func (c *testClient) readLine(t *testing.T) string {
-	t.Helper()
-	c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	line, err := c.r.ReadString('\n')
-	if err != nil {
-		t.Fatalf("read line: %v", err)
-	}
-	return strings.TrimRight(line, "\r\n")
-}
-
 // readUntil consumes lines until one contains substr; returns that line.
 func (c *testClient) readUntil(t *testing.T, substr string) string {
 	t.Helper()
@@ -276,11 +265,12 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timeout waiting for %s", what)
 }
 
-// fastMsgCount counts msg events available-consumed from ch via a collector.
+// fastMsgCount reports how many events are currently sitting unread in ch's
+// buffer. It deliberately never consumes from ch — occupancy via len() lets
+// assertions verify delivery volume without racing the drop semantics under
+// test or stealing events other checks still need. The count includes join/
+// system events, so it is a lower bound on delivered msg events.
 func fastMsgCount(ch <-chan Event) int {
-	// Non-blocking census of what has already been buffered plus a short
-	// cooperative drain: we must not consume events other assertions need,
-	// so instead of draining we rely on buffer occupancy via len().
 	return len(ch)
 }
 
@@ -357,6 +347,40 @@ func TestShutdownDeadlineDropsStuckClient(t *testing.T) {
 	for {
 		if _, err := hog.Read(buf); err != nil {
 			break // closed — good
+		}
+	}
+}
+
+// 5b. Regression: an already-expired context must take the force-close path
+// deterministically (no polite wait, no select race) and close live client
+// conns even though the hub may not have reached finalize yet. This pins the
+// incremental conn-tracking fix: force-close sees current conns, never a
+// stale snapshot.
+func TestShutdownExpiredContextForceCloses(t *testing.T) {
+	s, addr := startServer(t)
+
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	fmt.Fprintln(conn, "victim") // register; victim idles without reading
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	start := time.Now()
+	if err := s.Shutdown(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Shutdown err = %v, want context.DeadlineExceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("Shutdown took %v with expired ctx; wanted immediate force-close", elapsed)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	buf := make([]byte, 1)
+	for {
+		if _, err := conn.Read(buf); err != nil {
+			return // closed — the victim did not leak past Shutdown
 		}
 	}
 }

@@ -103,21 +103,22 @@ type Server struct {
 	wg     sync.WaitGroup // one unit per live writer goroutine
 	doneCh chan struct{}  // closed when hub finished AND all writers exited
 
-	connsMu    sync.Mutex
-	finalConns []net.Conn // snapshot taken at finalize, for forced close
+	connsMu   sync.Mutex
+	liveConns map[net.Conn]struct{} // every registered conn, kept current incrementally so force-close never sees a stale snapshot
 }
 
 // NewServer returns a ready-to-serve Server with its hub goroutine running.
 func NewServer() *Server {
 	s := &Server{
-		regCh:    make(chan *registerReq),
-		unregCh:  make(chan *client),
-		subAddCh: make(chan chan Event),
-		subDelCh: make(chan (<-chan Event)),
-		eventCh:  make(chan Event, hubQueueBuf),
-		stopCh:   make(chan struct{}),
-		hubDone:  make(chan struct{}),
-		doneCh:   make(chan struct{}),
+		regCh:     make(chan *registerReq),
+		unregCh:   make(chan *client),
+		subAddCh:  make(chan chan Event),
+		subDelCh:  make(chan (<-chan Event)),
+		eventCh:   make(chan Event, hubQueueBuf),
+		stopCh:    make(chan struct{}),
+		hubDone:   make(chan struct{}),
+		doneCh:    make(chan struct{}),
+		liveConns: make(map[net.Conn]struct{}),
 	}
 	go func() {
 		<-s.hubDone
@@ -142,15 +143,33 @@ func (s *Server) runHub() {
 		case req := <-s.regCh:
 			s.register(clients, subs, req)
 		case c := <-s.unregCh:
-			removeAndAnnounce(clients, subs, c)
+			s.removeAndAnnounce(clients, subs, c)
 		case ch := <-s.subAddCh:
 			subs[ch] = ch
 		case ch := <-s.subDelCh:
 			delete(subs, ch)
 		case ev := <-s.eventCh:
-			broadcast(clients, subs, ev)
+			s.broadcast(clients, subs, ev)
 		}
 	}
+}
+
+// trackConn / untrackConn maintain the live-connection set used by
+// force-close. Tracking happens incrementally at every registration and
+// every removal point (drop, leave, finalize), so Shutdown's deadline path
+// always sees the current conns even if ctx expires before the hub reaches
+// finalize — there is no snapshot-timing hole. Closing an already-closed
+// conn is a harmless no-op error.
+func (s *Server) trackConn(cn net.Conn) {
+	s.connsMu.Lock()
+	s.liveConns[cn] = struct{}{}
+	s.connsMu.Unlock()
+}
+
+func (s *Server) untrackConn(cn net.Conn) {
+	s.connsMu.Lock()
+	delete(s.liveConns, cn)
+	s.connsMu.Unlock()
 }
 
 // register assigns a unique display name (suffixing duplicates bob → bob-2),
@@ -164,6 +183,7 @@ func (s *Server) register(clients map[string]*client, subs map[<-chan Event]chan
 	c := req.c
 	c.name = name
 	clients[name] = c
+	s.trackConn(c.conn)
 
 	s.wg.Add(1)
 	go s.writeLoop(c)
@@ -174,10 +194,10 @@ func (s *Server) register(clients map[string]*client, subs map[<-chan Event]chan
 		s.deliverLine(clients, c, "* online: "+others)
 	}
 	if name != req.name {
-		broadcast(clients, subs, Event{Kind: "system",
+		s.broadcast(clients, subs, Event{Kind: "system",
 			Payload: fmt.Sprintf("%s is taken; new client named %s", req.name, name)})
 	}
-	broadcast(clients, subs, Event{Kind: "join", Payload: name + " joined"})
+	s.broadcast(clients, subs, Event{Kind: "join", Payload: name + " joined"})
 }
 
 // roster lists every member except except, space-separated.
@@ -201,6 +221,7 @@ func (s *Server) deliverLine(clients map[string]*client, c *client, line string)
 		// whole room. The writer exits once out is closed; closing the raw
 		// conn interrupts any in-flight Write immediately.
 		delete(clients, c.name)
+		s.untrackConn(c.conn)
 		close(c.out)
 		c.conn.Close()
 	}
@@ -210,13 +231,14 @@ func (s *Server) deliverLine(clients map[string]*client, c *client, line string)
 // every subscriber channel. Subscriber sends are non-blocking: a full
 // subscriber buffer loses events, never hub progress (slow-subscriber
 // isolation). Deleting from clients during range is safe in Go.
-func broadcast(clients map[string]*client, subs map[<-chan Event]chan Event, ev Event) {
+func (s *Server) broadcast(clients map[string]*client, subs map[<-chan Event]chan Event, ev Event) {
 	line := formatEvent(ev)
 	for _, c := range clients {
 		select {
 		case c.out <- line:
 		default:
 			delete(clients, c.name)
+			s.untrackConn(c.conn)
 			close(c.out)
 			c.conn.Close()
 		}
@@ -230,26 +252,21 @@ func broadcast(clients map[string]*client, subs map[<-chan Event]chan Event, ev 
 }
 
 // removeAndAnnounce deregisters a leaving client and tells the room.
-func removeAndAnnounce(clients map[string]*client, subs map[<-chan Event]chan Event, c *client) {
+func (s *Server) removeAndAnnounce(clients map[string]*client, subs map[<-chan Event]chan Event, c *client) {
 	if cur, ok := clients[c.name]; ok && cur == c {
 		delete(clients, c.name)
+		s.untrackConn(c.conn)
 		close(c.out)
-		broadcast(clients, subs, Event{Kind: "leave", Payload: c.name + " left"})
+		s.broadcast(clients, subs, Event{Kind: "leave", Payload: c.name + " left"})
 	}
 }
 
 // finalize performs the polite half of shutdown: a goodbye line for every
 // client, then out-channel closes so each writer drains what it can and
 // closes its conn. Subscriber channels are closed so their owners' range
-// loops end. A snapshot of live conns is kept for force-close.
+// loops end. Conns stay in liveConns until force-close or natural writer
+// exit handles them.
 func (s *Server) finalize(clients map[string]*client, subs map[<-chan Event]chan Event) {
-	s.connsMu.Lock()
-	s.finalConns = s.finalConns[:0]
-	for _, c := range clients {
-		s.finalConns = append(s.finalConns, c.conn)
-	}
-	s.connsMu.Unlock()
-
 	for _, c := range clients {
 		select {
 		case c.out <- "* " + goodbyeText:
@@ -362,9 +379,10 @@ func (s *Server) Serve(addr string) error {
 }
 
 // Shutdown stops accepting, politely disconnects clients (a goodbye system
-// line, then close), and unblocks Serve. If ctx expires before all writers
-// finish draining, remaining connections are force-closed and ctx.Err() is
-// returned. A second call returns net.ErrClosed wrapped.
+// line, then close), and unblocks Serve. If ctx expires (or has already
+// expired) before all writers finish draining, remaining connections are
+// force-closed and ctx.Err() is returned. A second call returns net.ErrClosed
+// wrapped.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	if s.closed {
@@ -380,6 +398,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	close(s.stopCh) // hub says goodbye, closes outs and subscribers, closes hubDone
 
+	if err := ctx.Err(); err != nil {
+		// Deterministic fast path for an already-expired context: skip the
+		// polite wait entirely instead of racing select between two ready
+		// cases, and always force-close.
+		s.forceCloseConns()
+		return err
+	}
 	select {
 	case <-s.doneCh: // hub finished AND every writer drained
 		return nil
@@ -389,22 +414,28 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 }
 
-// forceCloseConns kills every connection that was alive at finalize time so
-// wedged writers unblock and the server can be torn down under a deadline.
+// forceCloseConns kills every currently-tracked connection so wedged writers
+// unblock and the server can be torn down under a deadline. Because conns
+// are tracked incrementally at register/drop/leave time, this is correct
+// even if the hub never reached finalize.
 func (s *Server) forceCloseConns() {
 	s.connsMu.Lock()
-	conns := s.finalConns
-	s.finalConns = nil
+	conns := s.liveConns
+	s.liveConns = make(map[net.Conn]struct{})
 	s.connsMu.Unlock()
-	for _, cn := range conns {
-		cn.Close()
+	for cn := range conns {
+		cn.Close() // closing an already-closed conn is a harmless no-op
 	}
 }
 
-// Subscribe returns a receive-only channel of capacity buf receiving every
-// event until Unsubscribe or server close (which closes the channel). The
-// hub DROPS events when the buffer is full — it never blocks.
+// Subscribe returns a receive-only channel receiving every event until
+// Unsubscribe or server close (which closes the channel). The hub DROPS
+// events when the buffer is full — it never blocks. buf is clamped to a
+// minimum of 1; values <= 0 behave as capacity 1.
 func (s *Server) Subscribe(buf int) <-chan Event {
+	if buf < 1 {
+		buf = 1
+	}
 	ch := make(chan Event, buf)
 	select {
 	case s.subAddCh <- ch:
