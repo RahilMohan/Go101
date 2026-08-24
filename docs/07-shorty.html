@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 07 — shorty</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>shorty</h1>
+  <p class="subtitle">Go101 · Project 07 — a URL shortener REST API</p>
+  <div class="badge-row">
+    <span class="badge tier">Intermediate Tier</span>
+    <span class="badge">net/http 1.22+ routing</span>
+    <span class="badge">middleware</span>
+    <span class="badge">database/sql</span>
+    <span class="badge">SQLite</span>
+    <span class="badge">crypto/rand</span>
+    <span class="badge">httptest</span>
+    <span class="badge">graceful shutdown</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: the stdlib web tier plus one driver</h3>
+  <p>shorty is built from Go's own HTTP server stack — <code>net/http</code> with the
+     Go&nbsp;1.22-enhanced <code>http.ServeMux</code>, <code>httptest</code>, and
+     <code>crypto/rand</code> — plus exactly two things beyond the standard library:
+     <code>database/sql</code>'s driver contract fulfilled by <code>modernc.org/sqlite</code>,
+     a pure-Go SQLite implementation. That single dependency is the entire
+     <code>go.sum</code>. Projects 01–06 stayed dependency-free; this is the first project that
+     deliberately crosses the line, precisely so you can learn <em>how little</em> a well-chosen
+     dependency costs — and what the interface between your code and someone else's package
+     actually looks like.</p>
+
+  <table>
+    <thead>
+      <tr><th>Piece</th><th>Role in shorty</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>http.ServeMux</code> (Go 1.22 patterns)</td><td>Method-and-path routing: <code>POST /api/shorten</code>, <code>GET /{code}</code>, <code>GET /api/stats</code></td><td>The stdlib router grew method matching and wildcards — most small services no longer need a third-party router at all</td></tr>
+      <tr><td>Middleware idiom</td><td><code>RequestLogger</code> and <code>Recoverer</code> wrapped around the mux as <code>func(http.Handler) http.Handler</code></td><td>Cross-cutting concerns (logging, panic recovery) compose as decorators — order matters and is visible in one line of code</td></tr>
+      <tr><td><code>database/sql</code></td><td>Parameterized inserts/queries against SQLite; connection pooling; sentinel-error wrapping (<code>sql.ErrNoRows</code>)</td><td>The standard database interface: placeholders defeat injection, the pool is a knob you must size, and errors arrive wrapped</td></tr>
+      <tr><td><code>modernc.org/sqlite</code></td><td>Pure-Go (cgo-free) SQLite driver behind the <code>database/sql</code> interface</td><td>Driver choice is a tradeoff axis: speed vs. toolchain friction vs. portability</td></tr>
+      <tr><td><code>crypto/rand</code></td><td>Six-character base62 codes generated cryptographically randomly</td><td>Unpredictability matters even for "just IDs" — guessable codes leak other people's links</td></tr>
+      <tr><td><code>httptest</code></td><td>Full-stack tests over real handlers and a real temp-file database, no live ports managed by hand</td><td>HTTP servers are testable end-to-end without network ceremony</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>chi / gorilla/mux routers</strong> — both are excellent and battle-tested, but
+        they exist largely because the old default mux couldn't match methods or capture path
+        segments. Go 1.22 closed that gap. Routing through chi would hide exactly the lesson this
+        project exists to teach: reading and trusting the new pattern-matching grammar
+        (<code>"POST /api/shorten"</code>, <code>"/{code}"</code>, <code>r.PathValue</code>)
+        that now ships in every Go installation.</li>
+    <li><strong><code>mattn/go-sqlite3</code></strong> — the historically dominant SQLite driver,
+        but it binds to the C library via cgo. That means every contributor needs a C toolchain,
+        cross-compilation becomes painful (<code>CGO_ENABLED=1</code> plus per-target compilers),
+        and Windows CI needs extra setup. For a teaching repo whose tests must run anywhere
+        <code>go test</code> runs, that friction is disqualifying.</li>
+    <li><strong>PostgreSQL</strong> — the production-grade answer for a real multi-instance URL
+        shortener, and the wrong answer here. It demands a server process, credentials, port
+        management, and cleanup before the first test can run. A file-backed SQLite database
+        created inside <code>t.TempDir()</code> gives real SQL semantics — constraints,
+        transactions, persistence across reopen — with zero setup.</li>
+  </ul>
+
+  <h3>The pure-Go tradeoff, stated honestly</h3>
+  <div class="sidebar">
+    <p>The implementer's rationale, from the solution's own package comment:</p>
+    <p><em>"Storage uses modernc.org/sqlite: a pure-Go (cgo-free) SQLite driver, trading raw
+       speed for zero toolchain friction — no C compiler needed on any platform."</em></p>
+    <p>The pure-Go translation of SQLite is measurably slower than the C binding under heavy
+       write load, and its error strings are its own (more on that below). For a service whose
+       hot path is one indexed primary-key lookup per redirect — microseconds either way — the
+       speed cost is invisible, while the build-portability win is total.</p>
+  </div>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>The modern stdlib web tier.</strong> Method matching, wildcard segments, and
+        path-value extraction are now first-class in the standard library. Learning them here —
+        before any framework — means you'll always know what a router library is adding beyond
+        what <code>http.ServeMux</code> already does.</li>
+    <li><strong>database/sql as an interface, not a product.</strong> Your code speaks
+        <code>*sql.DB</code>; the driver is interchangeable. Swapping modernc for mattn (or for a
+        Postgres driver) changes one import and one DSN — which is exactly why the places where
+        the driver leaks through (error-text matching) deserve your attention.</li>
+    <li><strong>Server lifecycle ownership.</strong> Bounded request bodies, panic recovery,
+        structured logging, and Ctrl-C-driven graceful shutdown are not features you add later —
+        they're part of what "an HTTP server" means, exercised here from the first version.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>shorty_test.go</code> — the executable specification. If
+     your implementation passes these tests (including under <code>-race</code>), it satisfies
+     the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Round trip works end to end.</strong> POSTing
+        <code>{"url": "https://example.com/path?q=1"}</code> to <code>/api/shorten</code> returns
+        <code>201</code> with a 6-character <code>code</code> and a <code>short_url</code> of
+        base + "/" + code; GETting <code>/<code>code</code></code> returns
+        <code>302 Found</code> with the original target in <code>Location</code>; the store then
+        reports <code>Count() == 1</code>.</li>
+    <li><strong>R2 — Duplicate explicit codes conflict safely.</strong> A second
+        <code>SaveCode("dup1", …)</code> returns an error satisfying
+        <code>errors.Is(err, ErrCodeTaken)</code>, and the original mapping remains intact when
+        resolved afterwards.</li>
+    <li><strong>R3 — Validation rejects bad URLs with JSON errors.</strong> Empty strings,
+        scheme-less hosts, non-http(s) schemes (<code>ftp://</code>, <code>javascript:</code>),
+        and malformed URLs all get <code>400</code> with an <code>"error"</code> key in the body,
+        and nothing is stored (<code>Count() == 0</code> after the batch).</li>
+    <li><strong>R4 — Recoverer converts panics into clean 500s.</strong> A handler that panics
+        yields <code>500</code> with a JSON <code>{"error": …}</code> body; the recoverer's log
+        captures both the panic value and a goroutine stack trace; the request logger still emits
+        its method/path/status line for the same request.</li>
+    <li><strong>R5 — Concurrent shortens never collide.</strong> Twenty parallel POSTs all
+        return <code>201</code> with six-character codes, all codes are distinct, and the store
+        holds exactly twenty rows — passing under <code>-race</code>.</li>
+    <li><strong>R6 — Data survives close/reopen.</strong> Save a mapping, close the store,
+        reopen the same database file: resolve succeeds and count persists.</li>
+    <li><strong>R7 — Unknown codes surface as a typed error.</strong>
+        <code>Resolve("missing")</code> returns an error satisfying
+        <code>errors.Is(err, ErrNotFound)</code>.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Codes are unguessable.</strong> Generated from
+        <code>crypto/rand</code> over base62, not counters or timestamps — one user cannot
+        enumerate another's shortened URLs.</li>
+    <li><strong>NF2 — Request bodies are bounded.</strong> Every shorten request wraps its body
+        in <code>http.MaxBytesReader</code> at 1 MiB, so a hostile client can't stream gigabytes
+        into memory.</li>
+    <li><strong>NF3 — Panics never take down the process.</strong> Any downstream handler panic
+        is recovered at the middleware boundary, answered with a uniform 500 JSON body, and fully
+        logged with a stack.</li>
+    <li><strong>NF4 — Shutdown is graceful.</strong> Ctrl-C stops accepting new connections,
+        gives in-flight requests up to five seconds to finish, and closes the store cleanly.</li>
+    <li><strong>NF5 — Tests need no environment.</strong> Every test builds its own server on
+        an ephemeral port backed by a fresh temporary-file SQLite database; the suite passes
+        anywhere Go compiles, including with cgo disabled.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: One declarative route table</h3>
+  <pre><code>mux := http.<span class="fn">NewServeMux</span>()
+mux.<span class="fn">HandleFunc</span>(<span class="str">"POST /api/shorten"</span>, sv.handleShorten)
+mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /api/stats"</span>, sv.handleStats)
+mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /{code}"</span>, sv.handleRedirect)
+mux.<span class="fn">HandleFunc</span>(<span class="str">"/"</span>, <span class="fn">writeError</span>(http.StatusNotFound, <span class="str">"not found"</span>))</code></pre>
+  <p>The entire API surface is four lines, each readable as an English sentence: this method on
+     this path goes to this handler. Two details carry weight. First, <code>/api/stats</code> is
+     registered <em>before</em> <code>/{code}</code> conceptually matters less than you'd think —
+     ServeMux prefers the more specific pattern, so literal segments always beat wildcards;
+     <code>/api/stats</code> wins over <code>/{code}</code> regardless of registration order.
+     Second, the catch-all <code>"/"</code> exists to turn every unmatched request into a
+     deliberate JSON 404 rather than the mux's default plain-text response — clients of a JSON
+     API should never receive an HTML error page.</p>
+
+  <h3>D2: Logger outside, recoverer inside</h3>
+  <pre><code><span class="kw">return</span> <span class="fn">RequestLogger</span>(log.<span class="fn">Writer</span>())(<span class="fn">Recoverer</span>(log.<span class="fn">Writer</span>())(mux))</code></pre>
+  <p>Read middleware chains inside out: a request passes through <code>RequestLogger</code>
+     first, then <code>Recoverer</code>, then reaches the mux. The order is chosen for a
+     concrete reason: if <code>Recoverer</code> were outermost, a panicking request would abort
+     before the logger ever saw it finish, and the log line would vanish along with the panic.
+     With the logger outside, <em>every</em> request — including ones that panicked mid-handler
+     — gets exactly one completion line with its true status (the 500). Meanwhile the recoverer
+     sits close enough to the handlers that its deferred <code>recover()</code> catches anything
+     below it, and it writes the panic value plus <code>debug.Stack()</code> to the same log
+     sink. The test suite pins this arrangement: it asserts both the recovered JSON response
+     <em>and</em> the subsequent log line for the same exploded request.</p>
+
+  <h3>D3: One connection, because SQLite has one writer</h3>
+  <pre><code>db, err := sql.<span class="fn">Open</span>(<span class="str">"sqlite"</span>, dbPath)
+...
+db.<span class="fn">SetMaxOpenConns</span>(<span class="num">1</span>) <span class="com">// modernc.org/sqlite serializes writes; one conn avoids SQLITE_BUSY churn</span>
+<span class="kw">for</span> _, pragma := <span class="kw">range</span> []<span class="typ">string</span>{
+    <span class="str">"PRAGMA journal_mode=WAL"</span>,
+    <span class="str">"PRAGMA busy_timeout=5000"</span>,
+} { ... }</code></pre>
+  <p>This is the least obvious line in the project and arguably the most instructive.
+     <code>database/sql</code> wants to open many connections, but SQLite allows exactly one
+     writer at a time; a pool racing N connections toward the file produces
+     <code>SQLITE_BUSY</code> contention that the busy-timeout then papers over with waiting.
+     Capping the pool at one makes serialization happen in Go (where requests queue politely)
+     instead of inside SQLite lock machinery. The PRAGMAs follow immediately after open because
+     they apply <em>per connection</em> — with a one-connection pool, executing them once is
+     guaranteed sticky; with a growing pool you'd have to re-apply them on every new connection
+     via a connect hook. WAL journaling lets readers proceed during a write, and
+     <code>busy_timeout=5000</code> is belt-and-braces patience for any residual contention.</p>
+
+  <h3>D4: Bound the body before you decode it</h3>
+  <pre><code>r.Body = http.<span class="fn">MaxBytesReader</span>(w, r.Body, maxBodyLen)  <span class="com">// maxBodyLen = 1 &lt;&lt; 20 (1 MiB)</span>
+<span class="kw">var</span> req <span class="kw">struct</span>{ URL <span class="typ">string</span> <span class="str">`json:"url"`</span> }
+<span class="kw">if</span> err := json.<span class="fn">NewDecoder</span>(r.Body).<span class="fn">Decode</span>(&amp;req); err != <span class="kw">nil</span> {
+    <span class="fn">writeError</span>(http.StatusBadRequest, <span class="str">"invalid JSON body"</span>)(w, r)</code></pre>
+  <p>A JSON decoder will happily consume whatever stream it's handed; without a cap, one
+     malicious client streaming a multi-gigabyte "request body" becomes a memory/disk-exhaustion
+     denial of service. <code>MaxBytesReader</code> enforces the limit at read time and signals
+     the server to close the connection once the limit trips. Because the wrapper surfaces the
+     violation as an ordinary read error, the existing decode-failure path handles it — which is
+     why an oversized body comes back as <code>400 Bad Request</code> rather than the arguably
+     more correct <code>413 Content Too Large</code>. That's a documented simplification, not an
+     accident: one validation funnel, one status code, simpler contract. Production services
+     often split the case by inspecting the error type; the lesson is that you <em>choose</em>
+     this deliberately.</p>
+
+  <h3>D5: Crypto-random codes with collision retry</h3>
+  <pre><code><span class="kw">for</span> i := <span class="num">0</span>; i &lt; insertTries; i++ {   <span class="com">// insertTries = 5</span>
+    code := <span class="fn">generateCode</span>()
+    <span class="kw">switch</span> err := sv.store.<span class="fn">Save</span>(code, u.String()); {
+    <span class="kw">case</span> err == <span class="kw">nil</span>:
+        <span class="fn">writeJSON</span>(w, http.StatusCreated, map[<span class="typ">string</span>]<span class="typ">string</span>{
+            <span class="str">"code"</span>: code, <span class="str">"short_url"</span>: sv.base + <span class="str">"/"</span> + code,
+        })
+        <span class="kw">return</span>
+    <span class="kw">case</span> errors.<span class="fn">Is</span>(err, ErrCodeTaken):
+        <span class="kw">continue</span> <span class="com">// generated-code collision; astronomically rare — retry</span></code></pre>
+  <p>Six base62 characters give 62⁶ ≈ 56.8 billion codes. At even a million stored URLs, the
+     chance a fresh random code collides is about 0.0018% — yet the design still handles it,
+     because "astronomically rare" and "impossible" are different engineering claims. The loop
+     treats <code>ErrCodeTaken</code> not as failure but as instruction: draw again. Five tries
+     bounds worst-case work. The generator itself uses <code>crypto/rand</code>, mapping random
+     bytes onto the 62-character alphabet via modulo. That introduces a tiny modulo bias (256
+     isn't divisible by 62), skewing some characters by under 4% — negligible here where the
+     requirement is unguessability at human scale, and worth recognizing as a real (and
+     fixable, via rejection sampling) bias whenever the alphabet grows or security margins
+     tighten.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Go 1.22 routing grammar: methods, wildcards, and what {code} won't match</h3>
+  <pre><code>mux.<span class="fn">HandleFunc</span>(<span class="str">"POST /api/shorten"</span>, sv.handleShorten)
+mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /{code}"</span>, sv.handleRedirect)
+...
+target, err := sv.store.<span class="fn">Resolve</span>(r.<span class="fn">PathValue</span>(<span class="str">"code"</span>))</code></pre>
+  <p>Before Go 1.22, the default mux matched only literal prefixes; anything dynamic required a
+     third-party router. The new grammar puts three powers into the standard library. A
+     <strong>method prefix</strong> (<code>"POST /api/shorten"</code>) rejects wrong-method
+     requests with <code>405 Method Not Allowed</code> automatically — no manual method checking
+     inside handlers. A <strong>wildcard segment</strong> (<code>/{code}</code>) captures exactly
+     one path segment, retrievable with <code>r.PathValue("code")</code>. And specificity rules
+     resolve conflicts deterministically: literal beats wildcard, longer beats shorter, so
+     <code>GET /api/stats</code> always routes to stats, never into the redirect handler as a
+     code named <code>"stats"</code>.</p>
+  <p>The subtle point: <code>{code}</code> matches a <em>single segment</em> — it stops at
+     <code>/</code>. A request to <code>/foo/bar</code> doesn't route to the redirect handler
+     with code <code>"foo/bar"</code>; it falls through to the catch-all <code>"/"</code> and gets
+     the JSON 404. That containment is what makes the catch-all safe to register: only genuinely
+     single-segment paths can ever be interpreted as codes.</p>
+
+  <h3>Middleware as func(http.Handler) http.Handler</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">RequestLogger</span>(w io.<span class="typ">Writer</span>) <span class="kw">func</span>(http.<span class="typ">Handler</span>) http.<span class="typ">Handler</span> {
+    <span class="kw">return func</span>(next http.<span class="typ">Handler</span>) http.<span class="typ">Handler</span> {
+        <span class="kw">return</span> http.<span class="fn">HandlerFunc</span>(<span class="kw">func</span>(rw http.<span class="typ">ResponseWriter</span>, r *http.<span class="typ">Request</span>) {
+            start := time.<span class="fn">Now</span>()
+            rec := &amp;<span class="typ">statusRecorder</span>{<span class="typ">ResponseWriter</span>: rw, status: http.StatusOK}
+            next.<span class="fn">ServeHTTP</span>(rec, r)
+            fmt.<span class="fn">Fprintf</span>(w, <span class="str">"%s %s %d %v\n"</span>, r.Method, r.URL.Path, rec.status, time.<span class="fn">Since</span>(start))
+        })
+    }
+}</code></pre>
+  <p>The triple-nested signature looks intimidating until you name each layer: the outer call
+     takes configuration (where to log); the middle receives the <em>next</em> handler in the
+     chain; the inner is the actual handler that runs per request. This shape is the ecosystem's
+     de facto standard — chi, gorilla, and countless libraries use the identical type, which is
+     why middleware written this way composes across all of them. Note the
+     <code>statusRecorder</code> trick: <code>http.ResponseWriter</code> offers no way to ask
+     "what status did I write?", so the logger wraps it, records the code in
+     <code>WriteHeader</code>, and passes the wrapper downstream. Composition is visible in one
+     line — <code>RequestLogger(...)(Recoverer(...)(mux))</code> — and changing execution order
+     is literally reordering those calls.</p>
+
+  <h3>Placeholders vs concatenation: why ? is not a style choice</h3>
+  <pre><code><span class="com">// correct — the value travels separately from the SQL text:</span>
+db.<span class="fn">Exec</span>(<span class="str">`INSERT INTO urls (code, url) VALUES (?, ?)`</span>, code, url)
+
+<span class="com">// broken — the value is parsed as SQL:</span>
+db.<span class="fn">Exec</span>(<span class="str">"INSERT INTO urls VALUES ('" </span>+ code + <span class="str">"', '" </span>+ url + <span class="str">"')"</span>)</code></pre>
+  <p>Run the broken version with <code>code = "x'); DROP TABLE urls;--"</code> and the database
+     dutifully executes two statements: your insert and an attacker's table deletion. With
+     placeholders, the driver sends the statement text and the values down separate channels;
+     the SQL parser never sees user bytes as code, so injection is structurally impossible —
+     not merely filtered. The same mechanism is also a performance feature: the prepared
+     statement shape can be reused instead of re-parsed per row. In shorty every query uses
+     placeholders without exception, including lookups
+     (<code>SELECT url FROM urls WHERE code = ?</code>) — a lookup feels harmless to interpolate,
+     which is exactly how injection bugs survive code review.</p>
+
+  <h3>database/sql lifecycle: QueryRow, ErrNoRows, and honest wrapping</h3>
+  <pre><code><span class="kw">var</span> target <span class="typ">string</span>
+err := s.db.<span class="fn">QueryRow</span>(<span class="str">`SELECT url FROM urls WHERE code = ?`</span>, code).<span class="fn">Scan</span>(&amp;target)
+<span class="kw">if</span> errors.<span class="fn">Is</span>(err, sql.ErrNoRows) {
+    <span class="kw">return</span> <span class="str">""</span>, fmt.<span class="fn">Errorf</span>(<span class="str">"shorty: resolve %q: %w"</span>, code, ErrNotFound)
+}</code></pre>
+  <p><code>QueryRow</code> is the idiomatic single-row read: it defers fetching until
+     <code>Scan</code> and — critically — releases the connection automatically, so there is no
+     <code>rows.Close()</code> to forget. Its one quirk is that "no rows" arrives as an
+     <em>error</em>, the sentinel <code>sql.ErrNoRows</code>. The translation step shown above is
+     where storage vocabulary becomes domain vocabulary: callers check
+     <code>errors.Is(err, ErrNotFound)</code> and never learn that SQL was involved. One accuracy
+     note worth internalizing: because <code>fmt.Errorf("%w", ErrNotFound)</code> wraps the
+     <em>domain</em> sentinel (not <code>sql.ErrNoRows</code>) into a brand-new chain, a caller
+     who checks <code>errors.Is(err, sql.ErrNoRows)</code> will <em>not</em> match — the storage
+     detail is intentionally sealed behind the domain error. Also note the duplicate-detection
+     counterpart in <code>SaveCode</code>: it recognizes conflicts by matching the substring
+     <code>"UNIQUE constraint failed"</code> in the driver's error text. SQLite's spec doesn't
+     mandate structured error codes through <code>database/sql</code>, so this driver-dependent
+     sniffing is a pragmatic but portable-<em>only-within-this-driver</em> compromise — swap
+     drivers and that check may need revisiting.</p>
+
+  <h3>Graceful shutdown: signal to deadline to drain</h3>
+  <pre><code>ctx, stop := signal.<span class="fn">NotifyContext</span>(context.<span class="fn">Background</span>(), os.Interrupt)
+<span class="kw">defer</span> stop()
+...
+<span class="kw">select</span> {
+<span class="kw">case</span> err := &lt;-errCh:          <span class="com">// server stopped on its own</span>
+<span class="kw">case</span> &lt;-ctx.Done():            <span class="com">// Ctrl-C arrived</span>
+}
+
+shutdownCtx, cancel := context.<span class="fn">WithTimeout</span>(context.<span class="fn">Background</span>(), <span class="num">5</span> * time.Second)
+<span class="kw">defer</span> cancel()
+<span class="kw">if</span> err := srv.<span class="fn">Shutdown</span>(shutdownCtx); err != <span class="kw">nil</span> { ... }</code></pre>
+  <p>Killing a server mid-request drops connections and leaves clients retrying blind.
+     Graceful shutdown has three steps. <code>signal.NotifyContext</code> turns SIGINT into a
+     canceled context — signals become ordinary cancellation, testable and composable.
+     <code>srv.Shutdown(ctx)</code> then closes the listener (no <em>new</em> requests) while
+     letting in-flight handlers finish, bounded by the context: five seconds is a common budget
+     long enough for normal requests, short enough that a stuck handler can't pin the process
+     forever (after the deadline, Shutdown gives up and returns an error). Finally
+     <code>store.Close()</code> runs via defer, flushing SQLite cleanly — the reason the
+     persistence-across-reopen property holds in real operation, not just in tests. Note the
+     select guards the case where the server exits on its own (port already bound):
+     <code>ListenAndServe</code> always returns <code>http.ErrServerClosed</code> after a
+     successful Shutdown, which the code filters explicitly.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Full-stack tests without managing ports</h3>
+  <pre><code>ts := httptest.<span class="fn">NewServer</span>(sv.<span class="fn">Handler</span>())
+t.<span class="fn">Cleanup</span>(ts.Close)
+
+resp, body := <span class="fn">postShorten</span>(t, ts, target)</code></pre>
+  <p><code>httptest.NewServer</code> wires the real handler stack — mux, both middleware, the
+     real SQLite store — onto an OS-assigned ephemeral port, so tests exercise genuine HTTP over
+     loopback with zero port bookkeeping and zero cross-test collisions. The helpers encode the
+     suite's hygiene: <code>postShorten</code> marshals, posts, decodes, and fails the test on
+     transport errors; <code>noRedirectClient</code> sets
+     <code>CheckRedirect</code> to return <code>http.ErrUseLastResponse</code> so the redirect
+     test sees the raw <code>302</code> and inspects its <code>Location</code> header instead of
+     silently following it to the destination.</p>
+
+  <h3>Real databases, disposable files</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">newTestStore</span>(t *testing.T) *<span class="typ">Store</span> {
+    t.<span class="fn">Helper</span>()
+    store, err := <span class="fn">OpenStore</span>(filepath.<span class="fn">Join</span>(t.<span class="fn">TempDir</span>(), <span class="str">"test.db"</span>))
+    ...
+    t.<span class="fn">Cleanup</span>(<span class="kw">func</span>() { ... store.<span class="fn">Close</span>() })
+}</code></pre>
+  <p>The tests refuse to fake the storage layer. Each test opens a genuine SQLite database in
+     its own <code>t.TempDir()</code> — auto-created, auto-deleted — so constraint behavior,
+     PRAGMA effects, and persistence semantics are the real thing. That choice is what makes
+     <code>TestPersistenceAcrossReopen</code> meaningful: save, <code>Close()</code>,
+     <code>OpenStore</code> the same path again, and prove the mapping survived a genuine process-level
+     close/reopen cycle. An in-memory fake would test the fake.</p>
+
+  <h3>Concurrency as a first-class assertion</h3>
+  <p><code>TestConcurrentShortensAllDistinct</code> fires twenty POSTs simultaneously from
+     goroutines, collecting codes into pre-assigned slice slots guarded by one mutex. The
+     assertions are three-layered: zero failures, all twenty codes present <em>and distinct</em>
+     (checked via a seen-set), and <code>store.Count() == 20</code> — proving the single-
+     connection pool serialized the writers correctly rather than dropping any insert. Run with
+     <code>-race</code>, the test doubles as a memory-model audit of the handler stack under
+     simultaneous load. Distinctness is not paranoia: it verifies the crypto-random generator and
+     the collision-retry loop together, since a counter-based or timestamp-based code generator
+     could produce duplicates under exactly this kind of burst.</p>
+
+  <h3>Middleware proven with a deliberately exploding route</h3>
+  <pre><code>panicHandler := http.<span class="fn">HandlerFunc</span>(<span class="kw">func</span>(w http.<span class="typ">ResponseWriter</span>, r *http.<span class="typ">Request</span>) {
+    <span class="fn">panic</span>(<span class="str">"boom"</span>)
+})
+wrapped := <span class="fn">RequestLogger</span>(&amp;reqBuf)(<span class="fn">Recoverer</span>(&amp;logBuf)(panicHandler))</code></pre>
+  <p><code>TestMiddlewareRecoverAndLog</code> builds the chain by hand with
+     <code>bytes.Buffer</code> sinks instead of the global logger, mounts a handler whose only
+     job is to panic, and asserts the complete aftermath: the client receives a decodable JSON
+     <code>500</code> (not a hung or truncated response); the recoverer's buffer contains both
+     the panic value <code>"boom"</code> and goroutine stack evidence; and the logger's buffer
+     contains <code>GET /explode 500</code> — confirming the logger-outside-recoverer ordering
+     from D2 actually delivers a completion line for the failed request. Redirecting middleware
+     output into buffers is what turns "it logs somewhere" into an assertable fact.</p>
+
+  <h3>Negative space: proving what didn't happen</h3>
+  <p>The strongest assertions in the suite are about absence.
+     <code>TestShortenValidationRejectsBadURLs</code> drives six invalid payloads through the
+     table and then checks <code>store.Count() == 0</code> — rejected input left no residue.
+     <code>TestSaveCodeConflict</code> resolves <code>"dup1"</code> after the failed second
+     insert and asserts the <em>original</em> URL is intact — a conflict must not corrupt or
+     overwrite. Testing the happy path shows the system works; testing that failures leave
+     no trace shows it's safe.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>Every piece of shorty — stdlib routing, middleware discipline, database/sql portability,
+       SQLite durability — maps onto systems serving serious traffic today:</p>
+    <ul>
+      <li><strong>bit.ly-class URL shorteners</strong> — the canonical architecture is exactly
+          this shape scaled out: a thin HTTP tier doing one indexed key lookup per redirect,
+          fronted by aggressive caching. The interesting engineering lives in code generation
+          (avoiding guessable, colliding IDs) and read scalability — both problems shorty's
+          crypto-random base62 codes anticipate. Services like <strong>gotiny</strong> and
+          kubectl's own link shortener are Go-built examples.</li>
+      <li><strong>Go's dominance in API tiers</strong> — companies running high-traffic APIs on
+          Go's net/http stack include Uber, American Express, PayPal, and Twitch. The pattern is
+          consistent: modest handlers, composed middleware, strict timeouts and body limits at
+          the edge — precisely the habits this project drills.</li>
+      <li><strong>database/sql everywhere</strong> — the driver-interface pattern lets one codebase
+          target SQLite locally and Postgres in production; tools like
+          <strong>rqlite</strong> (distributed SQLite over Raft, itself written in Go) and
+          <strong>litestream</strong> (SQLite replication) demonstrate how far the humble
+          embedded-database choice scales when paired with disciplined access code.</li>
+      <li><strong>WAL mode in the field</strong> — write-ahead logging is why SQLite tolerates
+          concurrent readers during writes; it underpins everything from every browser's internal
+          storage to mobile apps to edge devices. Flipping one PRAGMA switched shorty's
+          concurrency profile too — a one-line decision with production-sized consequences.</li>
+    </ul>
+  </div>
+
+  <h3>Why Go owns the web tier</h3>
+  <ol>
+    <li><strong>The standard library is the framework.</strong> Routing, middleware, graceful
+        shutdown, and test harnesses ship in the distribution. Teams choose Go for API layers
+        partly because onboarding is "read net/http," not "learn our DSL" — and Go 1.22's router
+        upgrade removed the last common excuse for reaching outside the stdlib on day one.</li>
+    <li><strong>Goroutines make per-request concurrency free.</strong> The server spawns a
+        goroutine per connection; your handlers stay straight-line synchronous code even under
+        thousands of simultaneous requests. Shorty's handlers contain no locks or channels — the
+        only synchronization concern in the whole service lives at the SQLite writer boundary,
+        and one pool setting settles it.</li>
+    <li><strong>Boring durability wins.</strong> A file-backed embedded database with WAL, a
+        bounded-body HTTP tier, and graceful shutdown describe everything from a homelab service
+        to a Fortune-500 edge component. The gap between shorty and production is mostly
+        operational (replication, caching, metrics) — the code shapes you practiced here are the
+        same ones running when the traffic arrives.</li>
+  </ol>
+  <p>The through-line: a four-line route table, two pieces of middleware, parameterized SQL, and
+     a clean shutdown path are not a teaching toy. They are the irreducible core of every HTTP
+     service in Go — learned here in ~280 lines, with a race detector and a real database
+     keeping you honest.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="06-chatwire.html">&larr; Previous: chatwire</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 07 of 16</span>
+  <a class="btn" href="08-pubsubx.html">Next: pubsubx &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
