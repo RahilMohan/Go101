@@ -184,6 +184,32 @@ func TestProtocolRoundTrip(t *testing.T) {
 	sendAndExpect(t, conn, r, respBulk("TTL", "nope-key"), ":-2\r\n")
 }
 
+// TestProtocolBulkLengthCap is the M3 regression: an oversized bulk
+// length must get a protocol error reply instead of a giant allocation.
+func TestProtocolBulkLengthCap(t *testing.T) {
+	srv, err := NewServer(Config{Addr: "127.0.0.1:0"})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	defer srv.Shutdown(context.Background())
+	go srv.ListenAndServe()
+
+	conn, err := net.Dial("tcp", srv.ln.Addr().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	r := bufio.NewReader(conn)
+
+	// 2 GB bulk claim, far above maxRecordLen.
+	if _, err := conn.Write([]byte("*1\r\n$2000000000\r\n")); err != nil {
+		t.Fatalf("write oversized header: %v", err)
+	}
+	if got := readRespFrame(t, r); got != "-ERR protocol error\r\n" {
+		t.Fatalf("oversized bulk reply = %q, want %q", got, "-ERR protocol error\r\n")
+	}
+}
+
 // expectTTLOf reads the engine-side TTL for tk and formats the exact
 // integer frame the server must have replied with (bounded 57..60).
 func expectTTLOf(t *testing.T, e *Engine) string {
@@ -436,6 +462,152 @@ func TestMidFileCorruptionIsError(t *testing.T) {
 		t.Fatal("replay of mid-file corruption returned nil error, want error")
 	} else if !strings.Contains(err.Error(), "corrupt") {
 		t.Fatalf("error %q should mention corruption", err)
+	}
+}
+
+// TestTornTailRecoveryKeepsWALWritable is the C1 regression: after
+// replay truncates a torn tail, the engine must be able to keep
+// appending, close cleanly, and reopen — otherwise the first write
+// after a crash lands after the torn bytes and bricks the WAL.
+func TestTornTailRecoveryKeepsWALWritable(t *testing.T) {
+	dir := t.TempDir()
+
+	// Build a valid 3-record WAL while recording record boundaries.
+	buildOps := []op{
+		{"SET", []string{"r0", "zero"}},
+		{"SET", []string{"r1", "one"}},
+		{"SET", []string{"r2", "two"}},
+	}
+	boundsPath := filepath.Join(dir, "bounds.bin")
+	be, err := NewEngine(Config{WALPath: boundsPath})
+	if err != nil {
+		t.Fatalf("NewEngine bounds: %v", err)
+	}
+	bounds := []int64{0}
+	for _, o := range buildOps {
+		mustApply(t, be, o)
+		st, err := os.Stat(boundsPath)
+		if err != nil {
+			t.Fatalf("stat bounds WAL: %v", err)
+		}
+		bounds = append(bounds, st.Size())
+	}
+	be.kill()
+	raw, err := os.ReadFile(boundsPath)
+	if err != nil {
+		t.Fatalf("read valid WAL: %v", err)
+	}
+
+	// Tear the tail: cut into the middle of the last record.
+	tornPath := filepath.Join(dir, "torn-recover.bin")
+	tornLen := len(raw) - 5 // last record is longer than 5 bytes
+	if tornLen <= int(bounds[2]) {
+		t.Fatalf("truncation did not cut into last record: %d vs %d", tornLen, bounds[2])
+	}
+	if err := os.WriteFile(tornPath, raw[:tornLen], 0o644); err != nil {
+		t.Fatalf("write torn WAL: %v", err)
+	}
+
+	e, err := NewEngine(Config{WALPath: tornPath})
+	if err != nil {
+		t.Fatalf("reopen torn WAL: %v", err)
+	}
+	// Replay must have truncated away the torn bytes: file size is now
+	// exactly the end of the last complete record.
+	st, err := os.Stat(tornPath)
+	if err != nil {
+		t.Fatalf("stat recovered WAL: %v", err)
+	}
+	if st.Size() != bounds[2] {
+		t.Fatalf("torn tail not truncated: size = %d, want %d", st.Size(), bounds[2])
+	}
+	for i, o := range buildOps[:2] {
+		if v, ok := e.Get(o.args[0]); !ok || v != o.args[1] {
+			t.Fatalf("record %d lost: Get(%q) = (%q, %v)", i, o.args[0], v, ok)
+		}
+	}
+
+	// The critical follow-up: append AFTER recovery, close, reopen.
+	mustApply(t, e, op{"SET", []string{"post-crash", "written-after-recovery"}})
+	if err := e.Close(); err != nil {
+		t.Fatalf("close after recovery: %v", err)
+	}
+
+	e2, err := NewEngine(Config{WALPath: tornPath}) // MUST succeed
+	if err != nil {
+		t.Fatalf("reopen WAL written after torn-tail recovery: %v", err)
+	}
+	defer e2.Close()
+	want := map[string]string{
+		"r0": "zero", "r1": "one",
+		"post-crash": "written-after-recovery",
+	}
+	got := snapshot(t, e2)
+	for k, wv := range want {
+		if gv, ok := got[k]; !ok || gv != wv {
+			t.Fatalf("after recovery+append+reopen: Get(%q) = (%q, %v), want %q", k, gv, ok, wv)
+		}
+	}
+	if _, ok := got["r2"]; ok {
+		t.Fatal("torn record r2 resurrected after recovery")
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d keys, want %d", len(got), len(want))
+	}
+}
+
+// TestWALExpiryIsAbsolute is the I1 regression: EX must be logged as an
+// absolute deadline so a restart restores the remaining TTL instead of
+// resetting the clock to the original value.
+func TestWALExpiryIsAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wal.bin")
+
+	a, err := NewEngine(Config{WALPath: path})
+	if err != nil {
+		t.Fatalf("NewEngine A: %v", err)
+	}
+	mustApply(t, a, op{"SET", []string{"tk", "v", "EX", "5"}})
+	time.Sleep(1200 * time.Millisecond) // burn ~1.2s of the 5s TTL
+
+	// Crash-style reopen: abandon the handle, replay from the bytes.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read WAL mid-run: %v", err)
+	}
+	a.kill()
+	crashCopy := filepath.Join(dir, "crash-copy.bin")
+	if err := os.WriteFile(crashCopy, raw, 0o644); err != nil {
+		t.Fatalf("write crash copy: %v", err)
+	}
+	b, err := NewEngine(Config{WALPath: crashCopy})
+	if err != nil {
+		t.Fatalf("reopen after crash: %v", err)
+	}
+	d, ok := b.TTL("tk")
+	if !ok {
+		t.Fatal("expiry lost across crash reopen")
+	}
+	// Remaining ≈ 3.8s → ceil 4. A reset clock would report 5.
+	if n := ceilSeconds(d); n < 2 || n > 4 {
+		t.Fatalf("TTL after reopen = %ds (%v); want shrunk remainder in [2,4]s, not reset 5s", n, d)
+	}
+	if err := b.Close(); err != nil {
+		t.Fatalf("close B: %v", err)
+	}
+
+	// Clean close/reopen must preserve the same absolute deadline too.
+	c, err := NewEngine(Config{WALPath: crashCopy})
+	if err != nil {
+		t.Fatalf("clean reopen: %v", err)
+	}
+	defer c.Close()
+	d2, ok := c.TTL("tk")
+	if !ok {
+		t.Fatal("expiry lost across clean reopen")
+	}
+	if d2 > d { // only ever shrinks; equal-to-slightly-less expected
+		t.Fatalf("TTL grew across clean reopen: %v -> %v (clock was reset)", d, d2)
 	}
 }
 

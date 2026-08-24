@@ -168,18 +168,40 @@ func (e *Engine) exec(cmd string, args []string, persist bool) (string, error) {
 		}
 		var exp time.Time
 		if len(args) == 4 {
-			if !strings.EqualFold(args[2], "EX") {
+			switch {
+			case strings.EqualFold(args[2], "EX"):
+				secs, err := strconv.Atoi(args[3])
+				if err != nil || secs <= 0 {
+					return "", errors.New("ERR invalid EX value")
+				}
+				exp = time.Now().Add(time.Duration(secs) * time.Second)
+			case strings.EqualFold(args[2], "EXAT"):
+				// Internal form: absolute expiry unix-nano. Only ever
+				// produced by WAL replay so TTL clocks survive restarts;
+				// not part of the documented wire protocol.
+				nanos, err := strconv.ParseInt(args[3], 10, 64)
+				if err != nil || nanos <= 0 {
+					return "", errors.New("ERR invalid EXAT value")
+				}
+				exp = time.Unix(0, nanos)
+			default:
 				return "", errors.New("ERR syntax error")
 			}
-			secs, err := strconv.Atoi(args[3])
-			if err != nil || secs <= 0 {
-				return "", errors.New("ERR invalid EX value")
-			}
-			exp = time.Now().Add(time.Duration(secs) * time.Second)
 		}
 		e.setLocked(args[0], args[1], exp)
 		if persist {
-			if err := e.logWrite(cmd, args); err != nil {
+			// Log the absolute expiry, never relative seconds: replay
+			// must restore the exact deadline, not restart the clock.
+			recArgs := append([]string{cmd}, args...)
+			if len(args) == 4 && !exp.IsZero() {
+				recArgs = []string{"SET", args[0], args[1], "EXAT", strconv.FormatInt(exp.UnixNano(), 10)}
+			}
+			if err := e.logWrite(recArgs); err != nil {
+				// Note (no rollback): state was already mutated above;
+				// if the append fails the in-memory effect outlives the
+				// log entry, so a later replay would not see this write.
+				// A production WAL would log-then-apply or undo on
+				// failure; kept simple here for teaching scope.
 				return "", err
 			}
 		}
@@ -205,7 +227,7 @@ func (e *Engine) exec(cmd string, args []string, persist bool) (string, error) {
 			n = "1"
 		}
 		if persist && n == "1" {
-			if err := e.logWrite(cmd, args); err != nil {
+			if err := e.logWrite([]string{cmd, args[0]}); err != nil {
 				return "", err
 			}
 		}
@@ -362,13 +384,14 @@ func (e *Engine) TTL(key string) (time.Duration, bool) {
 
 // --- WAL writing ---
 
-// logWrite appends one command record to the WAL. Callers hold e.mu,
-// which also serializes appends.
-func (e *Engine) logWrite(cmd string, args []string) error {
+// logWrite appends one command record to the WAL; args includes the
+// command name as its first element. Callers hold e.mu, which also
+// serializes appends.
+func (e *Engine) logWrite(args []string) error {
 	if e.wal == nil {
 		return nil
 	}
-	rec := encodeRecord(append([]string{cmd}, args...))
+	rec := encodeRecord(args)
 	if err := e.wal.append(rec); err != nil {
 		return fmt.Errorf("minikv: WAL append: %w", err)
 	}
@@ -400,14 +423,30 @@ func (w *walFile) syncAndClose() error {
 	return err
 }
 
+// truncateTo drops everything after offset (a torn final record) and
+// rewinds the write cursor so the next append lands exactly at the new
+// end of file. Without this, post-recovery writes would land after the
+// torn bytes and the next reopen would fail with a corruption error.
+func (w *walFile) truncateTo(offset int64) error {
+	if err := w.f.Truncate(offset); err != nil {
+		return err
+	}
+	if _, err := w.f.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+	return w.f.Sync()
+}
+
 // --- WAL replay ---
 
 // replay applies every complete record in order. An incomplete final
-// record is dropped with a warning (torn tail); corruption inside a
-// complete record is a hard error because it means silent data damage,
-// not just an interrupted write.
+// record is dropped with a warning (torn tail) AND truncated away, so
+// the engine can keep appending cleanly afterwards; corruption inside
+// a complete record is a hard error because it means silent data
+// damage, not just an interrupted write.
 func (e *Engine) replay() error {
 	r := bufio.NewReader(e.wal.f)
+	var lastGood int64 // end offset of the last complete record
 	for {
 		payload, torn, err := nextRecord(r)
 		if err != nil {
@@ -415,6 +454,9 @@ func (e *Engine) replay() error {
 		}
 		if torn {
 			fmt.Fprintf(os.Stderr, "minikv: %s: dropping torn final record\n", e.wal.path)
+			if terr := e.wal.truncateTo(lastGood); terr != nil {
+				return fmt.Errorf("minikv: %s: truncating torn tail: %w", e.wal.path, terr)
+			}
 			return nil
 		}
 		if payload == nil { // clean EOF
@@ -427,6 +469,7 @@ func (e *Engine) replay() error {
 		if _, err := e.exec(strings.ToUpper(args[0]), args[1:], false); err != nil {
 			return fmt.Errorf("minikv: %s: corrupt WAL record: %w", e.wal.path, err)
 		}
+		lastGood += 4 + int64(len(payload))
 	}
 }
 
@@ -507,11 +550,16 @@ func decodeRecord(p []byte) ([]string, error) {
 // --- lifecycle & background sweep ---
 
 // Close stops the sweeper, syncs and closes the WAL. Idempotent.
+// The sweeper is joined before taking e.mu (sweepOnce needs e.mu, so
+// holding it across the join would deadlock); the WAL close itself
+// happens under e.mu so no in-flight Apply can touch the file.
 func (e *Engine) Close() error {
 	var err error
 	e.closeOnce.Do(func() {
 		close(e.stop)
 		<-e.sweepDone
+		e.mu.Lock()
+		defer e.mu.Unlock()
 		if e.wal != nil {
 			err = e.wal.syncAndClose()
 		}
@@ -520,11 +568,14 @@ func (e *Engine) Close() error {
 }
 
 // kill simulates a process crash: the WAL file handle is abandoned
-// without fsync or cleanup. Test-only hook for crash-consistency tests.
+// without fsync or cleanup, under e.mu like Close. Test-only hook for
+// crash-consistency tests.
 func (e *Engine) kill() {
 	e.closeOnce.Do(func() {
 		close(e.stop)
 		<-e.sweepDone
+		e.mu.Lock()
+		defer e.mu.Unlock()
 		if e.wal != nil {
 			e.wal.f.Close()
 		}
@@ -607,6 +658,9 @@ func (s *Server) ListenAndServe() error {
 			}
 			return fmt.Errorf("minikv: accept: %w", err)
 		}
+		// Register the conn and bump the WaitGroup under the same lock
+		// so Shutdown can never observe the conn as tracked while its
+		// serveConn goroutine is not yet counted (drain race).
 		s.mu.Lock()
 		if s.closed {
 			s.mu.Unlock()
@@ -614,8 +668,8 @@ func (s *Server) ListenAndServe() error {
 			continue
 		}
 		s.conns[c] = struct{}{}
-		s.mu.Unlock()
 		s.wg.Add(1)
+		s.mu.Unlock()
 		go s.serveConn(c)
 	}
 }
@@ -725,7 +779,9 @@ func readCommand(r *bufio.Reader) ([]string, error) {
 			return nil, fmt.Errorf("expected bulk header, got %q", line)
 		}
 		l, err := strconv.Atoi(string(line[1:]))
-		if err != nil || l < 0 {
+		if err != nil || l < 0 || l > maxRecordLen {
+			// Cap the allocation up front: a hostile or buggy client
+			// must not be able to make us allocate from its say-so.
 			return nil, fmt.Errorf("bad bulk length %q", line[1:])
 		}
 		buf := make([]byte, l+2) // payload + CRLF
