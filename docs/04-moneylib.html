@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 04 — moneylib</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>moneylib</h1>
+  <p class="subtitle">Go101 · Project 04 — currency-safe monetary arithmetic</p>
+  <div class="badge-row">
+    <span class="badge tier">Beginner Tier</span>
+    <span class="badge">math/bits</span>
+    <span class="badge">strconv</span>
+    <span class="badge">errors</span>
+    <span class="badge">int64 minor units</span>
+    <span class="badge">Table-driven tests</span>
+    <span class="badge">Fuzzing</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: three stdlib packages and a strong opinion about floats</h3>
+  <p>moneylib is built on <code>math/bits</code>, <code>strconv</code>, and
+     <code>errors</code>, with <code>fmt</code>, <code>math</code>, and <code>strings</code> in
+     supporting roles. No decimal library, no arbitrary precision, no <code>go.sum</code>. That
+     minimalism is the point: money is just an integer count of minor units plus a label, and every
+     hard problem in this project — overflow, rounding, parsing, formatting — is an integer problem.
+     Where project 03 taught cost models of library calls, project 04 teaches something more
+     dangerous: how numbers silently lie when you pick the wrong representation.</p>
+
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in moneylib</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>math/bits</code></td><td><code>Mul64</code> computes a full 128-bit product so <code>Mul</code> can detect wraparound instead of silently wrapping</td><td>The hardware gives you more precision than your type holds — if you know where to look</td></tr>
+      <tr><td><code>strconv</code></td><td><code>FormatUint</code>/<code>ParseInt</code> render and parse minor units exactly</td><td>Text-to-number boundaries are where precision dies; strconv keeps both directions lossless</td></tr>
+      <tr><td><code>errors</code></td><td>Sentinel <code>ErrCurrencyMismatch</code>, checked with <code>errors.Is</code>, enriched with <code>%w</code> context by callers</td><td>A library's error vocabulary is part of its public API contract</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>float64 money — the classic bug.</strong> Representing $1.10 as a float and adding
+        it up is the canonical demonstration that binary floating point cannot represent most
+        decimal fractions: <code>0.1 + 0.2 = 0.30000000000000004</code>. In a toy this is funny;
+        in a billing system it is an audit finding. The entire library exists as the counter-example:
+        every value here is an <code>int64</code>, and no conversion to or from floating point
+        exists anywhere in the API surface.</li>
+    <li><strong>shopspring/decimal</strong> — the de-facto ecosystem answer for decimal arithmetic.
+        It would work perfectly, which is precisely why it's rejected: it hides the
+        integer-precision lesson. When the library absorbs rounding and scale, you never learn
+        <em>why</em> minor-unit arithmetic is the industry default or what a 128-bit product has to
+        do with multiplying cents. Use it at work after you can build its reasoning yourself.</li>
+    <li><strong>big.Rat / big.Int</strong> — arbitrary-precision rationals make overflow
+        impossible, which sounds like a feature until you notice what it costs: allocations on every
+        operation, pointer-heavy values, and no reason to ever think about <code>int64</code>
+        limits. Real payment cores use fixed-width integers because they are fast, comparable, and
+        cache-friendly — and therefore must be <em>checked</em>. Overkill here means the lesson
+        disappears.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Minor-unit integer arithmetic.</strong> Storing cents instead of dollars converts
+        "decimal precision" into plain integer math — exact, order-independent, and free. This is
+        how ISO 4217 actually models currency, and once internalized it permanently changes how you
+        read financial code.</li>
+    <li><strong>Checked overflow via <code>bits.Mul64</code>.</strong> Fixed-width integers
+        overflow; the professional response is not avoidance but detection.
+        Computing the full 128-bit product and comparing against the representable range turns
+        silent wraparound — the worst kind of bug — into an ordinary returned error.</li>
+    <li><strong>Fuzz-driven API confidence.</strong> Two fuzz targets encode the library's deepest
+        promises (round-trip fidelity, inverse operations) as machine-checkable properties, then let
+        millions of random inputs attack them. Table tests pin known edges; fuzzing searches for the
+        ones you didn't think of.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>money_test.go</code> at the project root — the executable
+     specification. If your implementation passes these tests, it satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Construction and accessors.</strong> <code>NewAmount(minor, c)</code> builds an
+        Amount; <code>MinorUnits()</code> returns the signed count and <code>Currency()</code> the
+        denomination — fields stay encapsulated (<code>TestAccessors</code>).</li>
+    <li><strong>R2 — Add/Sub within one currency.</strong> Both return new Amounts with correct
+        results across positive, negative, and zero operands, and across all four currencies
+        including JPY (exponent 0) and BHD (exponent 3).</li>
+    <li><strong>R3 — Currency mismatch is an error, not a sum.</strong> Adding or subtracting USD
+        and EUR (or USD and JPY) yields an error satisfying <code>errors.Is(err,
+        ErrCurrencyMismatch)</code> <em>and</em> a zero Amount — never a number that pretends two
+        currencies are comparable.</li>
+    <li><strong>R4 — Mul detects overflow.</strong> <code>MaxInt64 × 1</code> and
+        <code>MinInt64 × 1</code> succeed; <code>(MaxInt64/2+1) × 2</code>,
+        <code>MaxInt64 × 10</code>, <code>MinInt64 × 2</code>, and the notorious
+        <code>MinInt64 × -1</code> all return errors rather than wrapped garbage
+        (<code>TestMulOverflow</code>).</li>
+    <li><strong>R5 — Alloc splits exactly, remainder to the earliest parts.</strong> For every
+        tested currency, totals including negatives, and n = 1..7: parts sum back to the total
+        exactly, each early part is base+step and each later part base, and
+        <code>Alloc(5, 2)</code> gives <code>[3, 2]</code> while <code>Alloc(-5, 2)</code> gives
+        <code>[-3, -2]</code>.</li>
+    <li><strong>R6 — Alloc rejects non-positive n.</strong> n = 0, −1, −7 each return an error.</li>
+    <li><strong>R7 — String is canonical per exponent.</strong> <code>123456</code> USD renders
+        <code>"1234.56 USD"</code>; <code>-1250</code> EUR renders <code>"-12.50 EUR"</code>;
+        <code>123456</code> JPY renders <code>"123456 JPY"</code>; fractional digits are zero-padded
+        to full exponent width; <code>NewAmount(math.MinInt64, USD).String()</code> equals
+        <code>"-92233720368547758.08 USD"</code> exactly (<code>TestStringFormats</code>,
+        <code>TestMinInt64String</code>).</li>
+    <li><strong>R8 — ParseAmount accepts canonical forms and round-trips.</strong>
+        <code>"1234.56 USD"</code>, <code>"-12.00 EUR"</code>, <code>"500 JPY"</code>,
+        <code>"1.001 BHD"</code> parse to expected minor counts and re-render byte-identically.</li>
+    <li><strong>R9 — ParseAmount rejects sixteen classes of malformed input.</strong> Wrong
+        fractional digit count either way (<code>"1.234 USD"</code>, <code>"1.2 USD"</code>), any
+        decimals on JPY (<code>"1.5 JPY"</code>), unknown codes, lowercase codes, bare signs,
+        leading dots, trailing dots, embedded spaces, non-digits, out-of-range magnitudes — each
+        produces an error, never a best-effort Amount.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — No floats, anywhere.</strong> Parsing, arithmetic, and rendering are exact
+        end to end; the string representation round-trips without information loss.</li>
+    <li><strong>NF2 — Errors wrap with context.</strong> The sentinel travels inside
+        <code>fmt.Errorf("%w")</code> chains that name the offending operation and operands, so
+        <code>errors.Is</code> checks survive while messages stay debuggable.</li>
+    <li><strong>NF3 — Properties hold under fuzzing.</strong> Any input that parses must re-parse
+        identically through <code>String</code>; any successful same-currency <code>Add</code> must
+        be inverted exactly by <code>Sub</code>. Both properties are encoded as fuzz targets.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Immutable Amount value semantics</h3>
+  <pre><code><span class="com">// Amount is an immutable value: a count of minor units plus the currency it</span>
+<span class="com">// is denominated in.</span>
+<span class="kw">type</span> <span class="typ">Amount</span> <span class="kw">struct</span> {
+    minor    <span class="typ">int64</span>
+    currency <span class="typ">Currency</span>
+}</code></pre>
+  <p>Every operation is a method on the value receiver returning a brand-new
+     <code>Amount</code>: <code>a.Add(b)</code> never mutates <code>a</code>. This mirrors how
+     money behaves in the real world — paying someone changes your balance by producing a new
+     balance, not by reaching into their wallet. Value semantics also make Amounts safe to share
+     across goroutines with zero synchronization, trivially comparable with <code>==</code> (the
+     fuzz targets lean on this), and usable as map keys. The zero <code>Amount</code> is documented
+     as <em>not</em> a valid monetary value: build amounts only through
+     <code>NewAmount</code> or <code>ParseAmount</code>, and error paths return it deliberately so
+     callers can detect "no result" without nil-pointer ceremony.</p>
+
+  <h3>D2: Unexported fields + accessors — invariants need a chokepoint</h3>
+  <pre><code>a := NewAmount(<span class="num">123456</span>, USD)
+a.<span class="fn">MinorUnits</span>()   <span class="com">// 123456 — read access, sign included</span>
+a.<span class="fn">Currency</span>()    <span class="com">// Currency{"USD", 2} — read access</span></code></pre>
+  <p>Why hide <code>minor</code> behind <code>MinorUnits()</code> when the field could simply be
+     exported? Because exported fields are a promise that <em>any</em> value of the struct is valid,
+     forever. If <code>minor</code> were public, nothing stops a caller from constructing an Amount
+     that bypasses every check this library performs — and a future change (say, normalizing on
+     construction, or caching a derived field) becomes a breaking API change. Unexported fields
+     create a single chokepoint: the package controls every Amount that exists, so its invariants
+     ("currency is always one of the registered ones", "operations never silently mix currencies")
+     are enforceable, not aspirational. Accessors preserve readability for legitimate reads. This
+     is the standard-library idiom throughout — <code>time.Time</code>, <code>strings.Builder</code>
+     — and <code>TestAccessors</code> pins it as behavior, not style.</p>
+
+  <h3>D3: Currency as a comparable struct, not a string</h3>
+  <pre><code><span class="kw">type</span> <span class="typ">Currency</span> <span class="kw">struct</span> {
+    Code     <span class="typ">string</span> <span class="com">// ISO 4217 alphabetic code, e.g. "USD"</span>
+    Exponent <span class="typ">int</span>    <span class="com">// minor units per major unit is 10^Exponent</span>
+}
+
+<span class="kw">var</span> (
+    USD = <span class="typ">Currency</span>{<span class="str">"USD"</span>, <span class="num">2</span>}
+    JPY = <span class="typ">Currency</span>{<span class="str">"JPY"</span>, <span class="num">0</span>}
+    BHD = <span class="typ">Currency</span>{<span class="str">"BHD"</span>, <span class="num">3</span>}
+)</code></pre>
+  <p>A string-only design would push exponent knowledge into every call site — every function
+     asking "how many decimal places does <code>"USD"</code> have?" — inviting divergence between
+     modules that disagree about their own currency. Making Currency a struct bundles the code with
+     its exponent, and because structs containing only comparable fields are themselves comparable,
+     the mismatch guard is a single <code>==</code>:</p>
+  <pre><code><span class="kw">if</span> a.currency != b.currency {
+    <span class="kw">return</span> Amount{}, fmt.<span class="fn">Errorf</span>(<span class="str">"money: %w: %s + %s"</span>, ErrCurrencyMismatch, a.currency.Code, b.currency.Code)
+}</code></pre>
+  <p>The named variables (<code>USD</code>, <code>EUR</code>, <code>JPY</code>,
+     <code>BHD</code>) act as the registry; <code>byCode</code> indexes them for parsing. Note what
+     the comparison costs: nothing. No string normalization, no lookup — structural equality in one
+     instruction, which is why the fuzz target can afford to check mismatch behavior on
+     <em>every</em> iteration.</p>
+
+  <h3>D4: Alloc — the remainder-to-earliest convention</h3>
+  <pre><code>base := a.minor / <span class="typ">int64</span>(n)
+rem := a.minor % <span class="typ">int64</span>(n)
+step := <span class="typ">int64</span>(<span class="num">1</span>)
+<span class="kw">if</span> rem &lt; <span class="num">0</span> {
+    step = -<span class="num">1</span>
+}
+parts := <span class="fn">make</span>([]Amount, n)
+<span class="kw">for</span> i := <span class="kw">range</span> parts {
+    m := base
+    <span class="kw">if</span> <span class="typ">int64</span>(i) &lt; <span class="typ">int64</span>(<span class="fn">abs64</span>(rem)) {
+        m += step
+    }
+    parts[i] = Amount{minor: m, currency: a.currency}
+}</code></pre>
+  <p>Splitting 5 cents two ways has no exact answer; the library's contract is that the leftover
+     goes to the <em>earliest</em> parts: <code>[3, 2]</code>. The convention matters more than the
+     choice — any deterministic rule keeps the core invariant (<code>sum(parts) == total</code>)
+     true, but "earliest gets the remainder" matches how payment splits are typically reconciled
+     and makes the output predictable enough to pin in tests. The <code>step</code> flip handles
+     the subtle Go detail that <code>-5 % 2 == -1</code>: remainders carry the dividend's sign, so
+     negative amounts distribute <code>[-3, -2]</code> symmetrically instead of drifting toward
+     zero. <code>TestAllocExactSum</code> brute-forces 4 currencies × 6 totals × 7 values of n and
+     asserts the invariant on every single part — a property test wearing a unit-test uniform.</p>
+
+  <h3>D5: Errors as API — sentinel inside a wrapping chain</h3>
+  <pre><code><span class="kw">var</span> ErrCurrencyMismatch = errors.<span class="fn">New</span>(<span class="str">"money: currency mismatch"</span>)
+...
+<span class="kw">return</span> Amount{}, fmt.<span class="fn">Errorf</span>(<span class="str">"money: %w: %s + %s"</span>, ErrCurrencyMismatch, a.currency.Code, b.currency.Code)</code></pre>
+  <p>Callers need to ask one question programmatically — "is this a currency problem?" — and read
+     a different answer humanly — "USD + EUR failed." The sentinel answers the first via
+     <code>errors.Is</code>; the <code>%w</code>-wrapped context answers the second with the actual
+     codes and operation. Returning the zero Amount alongside the error completes the contract:
+     failure never yields a plausible-looking number.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>The MinInt64 trap — absolute value needs uint64 space</h3>
+  <div class="callout">
+    <p><strong>A real bug found in review:</strong> writing <code>abs(x)</code> as
+    <code>-x</code> for negative x looks airtight — and detonates on exactly one input.
+    <code>-MinInt64</code> wraps around to <code>MinInt64</code> itself, because in two's
+    complement the negative range is one wider than the positive range.</p>
+  </div>
+  <pre><code><span class="com">// abs64 returns |x| computed in uint64 space so MinInt64 is representable.</span>
+<span class="kw">func</span> <span class="fn">abs64</span>(x <span class="typ">int64</span>) <span class="typ">uint64</span> {
+    <span class="kw">if</span> x &lt; <span class="num">0</span> {
+        <span class="kw">return</span> <span class="typ">uint64</span>(-(x + <span class="num">1</span>)) + <span class="num">1</span>
+    }
+    <span class="kw">return</span> <span class="typ">uint64</span>(x)
+}</code></pre>
+  <p>Two's complement gives <code>int64</code> the range [−2<sup>63</sup>, 2<sup>63</sup>−1]. The
+     magnitude of <code>MinInt64</code> is 2<sup>63</sup> — a number that fits in
+     <code>uint64</code> but not in any <code>int64</code>, including itself. So negation cannot be
+     the last step; it must never happen in signed space at all. The trick above adds 1 first
+     (bringing <code>MinInt64</code> down to a negatable <code>MaxInt64</code>), negates, casts to
+     unsigned, then adds the 1 back. Every consumer of magnitudes — <code>Mul</code>,
+     <code>String</code>'s digit extraction, <code>Alloc</code>'s remainder comparison — routes
+     through this one function. The test suite pins the consequence:
+     <code>NewAmount(math.MinInt64, USD).String()</code> must equal
+     <code>"-92233720368547758.08 USD"</code>, a literal computed by hand because any
+     implementation that flirts with signed negation will produce the wrong digits here. This is
+     the kind of bug fuzzing finds eventually and a good edge-case table finds immediately.</p>
+
+  <h3>Overflow detection with bits.Mul64 — borrowing the missing half of the product</h3>
+  <pre><code>neg := (a.minor &lt; <span class="num">0</span>) != (n &lt; <span class="num">0</span>)
+hi, lo := bits.<span class="fn">Mul64</span>(<span class="typ">uint64</span>(<span class="fn">abs64</span>(a.minor)), <span class="typ">uint64</span>(<span class="fn">abs64</span>(n)))
+<span class="com">// Magnitude 2^63 is representable only as MinInt64, so legal only for a negative result.</span>
+maxMag := <span class="typ">uint64</span>(math.<span class="typ">MaxInt64</span>)
+<span class="kw">if</span> neg {
+    maxMag = <span class="num">1</span> &lt;&lt; <span class="num">63</span>
+}
+<span class="kw">if</span> hi != <span class="num">0</span> || lo &gt; maxMag {
+    <span class="kw">return</span> Amount{}, fmt.<span class="fn">Errorf</span>(<span class="str">"money: multiply overflows int64: %d * %d"</span>, a.minor, n)
+}</code></pre>
+  <p>Multiplying two 64-bit numbers truthfully produces up to 128 bits; <code>int64 *</code>
+     operator simply discards the top half and hands you a wrong-but-well-typed answer. Go's
+     <code>bits.Mul64</code> refuses to discard anything: it returns the full product split into
+     high and low 64-bit words. Detection then reduces to arithmetic: if the high word is nonzero
+     the product exceeds 64 bits outright; otherwise compare the low word against the largest
+     representable <em>magnitude</em>. That asymmetry — <code>MaxInt64</code> for positive results,
+     2<sup>63</sup> for negative ones — is the two's complement boundary again, and it produces the
+     pleasingly precise test row <code>{"min times minus one overflows", MinInt64, -1, ...,
+     wantErr: true}</code> sitting right next to <code>{"min times plus one fits"}</code>.
+     Sign handling stays outside the multiplication entirely: take absolute values (via
+     <code>abs64</code>, naturally), multiply magnitudes, reapply the XOR of signs afterward. The
+     alternative — pre-dividing inputs to "check ahead of time" — is fiddlier, slower, and easy to
+     get subtly wrong; the hardware already did the wide multiply for you.</p>
+
+  <h3>Table-driven test anatomy — one loop, many verdicts</h3>
+  <pre><code>tests := []<span class="kw">struct</span> {
+    name    <span class="typ">string</span>
+    a       Amount
+    b       Amount
+    wantSum <span class="typ">int64</span>
+    wantSub <span class="typ">int64</span>
+    wantErr <span class="kw">error</span> <span class="com">// non-nil means both ops must fail with errors.Is</span>
+}{
+    {<span class="str">"same currency add/sub"</span>, NewAmount(<span class="num">150</span>, USD), NewAmount(<span class="num">25</span>, USD), <span class="num">175</span>, <span class="num">125</span>, <span class="kw">nil</span>},
+    {<span class="str">"cross currency USD/EUR"</span>, NewAmount(<span class="num">100</span>, USD), NewAmount(<span class="num">100</span>, EUR), <span class="num">0</span>, <span class="num">0</span>, ErrCurrencyMismatch},
+    ...
+}
+<span class="kw">for</span> _, tt := <span class="kw">range</span> tests {
+    t.<span class="fn">Run</span>(tt.name, <span class="kw">func</span>(t *testing.T) { ... })
+}</code></pre>
+  <p>The anonymous struct is the whole pattern: cases are data, the runner is code written once.
+     Three details separate competent table tests from great ones. First, <code>t.Run(tt.name,
+     ...)</code> gives each case its own subtest, so a failure names the case
+     (<code>--- FAIL: TestAddSubTable/cross_currency_USD/EUR</code>) instead of pointing at a line
+     inside a giant loop. Second, error expectations live in the table too
+     (<code>wantErr</code>), and the runner branches: expected-error cases assert with
+     <code>errors.Is</code> <em>and</em> verify the zero-Amount contract; success cases assert both
+     the numeric result and the surviving currency. Third, one table exercises two functions
+     (<code>Add</code> and <code>Sub</code>) whose cases mirror each other — because the operations'
+     relationship is itself part of the specification. When a reviewer asks "what happens with JPY?
+     with BHD?" the answer is visible as rows, not buried in procedural assertions.</p>
+
+  <h3>Fuzzing in Go — properties attacked at scale</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">FuzzParseAmount</span>(f *testing.F) {
+    f.<span class="fn">Add</span>(<span class="str">"1234.56 USD"</span>)          <span class="com">// seed corpus: known-good</span>
+    f.<span class="fn">Add</span>(<span class="str">"-12.00 EUR"</span>)
+    f.<span class="fn">Add</span>(<span class="str">""</span>)                     <span class="com">// seed corpus: known-bad</span>
+    f.<span class="fn">Add</span>(<span class="str">"1.234 USD"</span>)
+    f.<span class="fn">Fuzz</span>(<span class="kw">func</span>(t *testing.T, s <span class="typ">string</span>) {
+        a, err := ParseAmount(s)
+        <span class="kw">if</span> err != <span class="kw">nil</span> {
+            t.<span class="fn">Skip</span>()              <span class="com">// unparseable input isn't a bug — skip</span>
+        }
+        b, err := ParseAmount(a.<span class="fn">String</span>())
+        <span class="kw">if</span> err != <span class="kw">nil</span> || a != b {  <span class="com">// the property: round-trip is identity</span>
+            t.<span class="fn">Fatalf</span>(<span class="str">"round trip changed value: %v -&gt; %v via %q"</span>, a, b, a.<span class="fn">String</span>())
+        }
+    })
+}</code></pre>
+  <p>Run <code>go test -fuzz=FuzzParseAmount</code> and Go generates millions of random strings,
+     feeding each through the property function; any crash is minimized and saved into
+     <code>testdata/</code> as a permanent regression case. Without <code>-fuzz</code>, the seeds
+     still run as ordinary unit tests in CI — which is why the corpus mixes valid formats,
+     rejection cases, and empty strings. The intellectual content is the <em>property</em>, not the
+     machinery: we don't assert what any particular input should produce, we assert a universal
+     law — <code>ParseAmount(String(a)) == a</code> for every parseable string. <code>t.Skip</code>
+     encodes the domain knowledge that most random strings are legitimately unparseable; only
+     inputs that claim validity can violate the law. A sibling target, <code>FuzzAdd</code>,
+     attacks arithmetic: for matching currencies, <code>(a+b)−b == a</code> whenever both
+     operations succeed, and mismatched currencies must yield the sentinel plus a zero Amount on
+     every single iteration. Together they cover the two ways a money library can quietly betray
+     you: losing information in text, and losing it in arithmetic.</p>
+
+  <h3>Doc comments as the public API contract</h3>
+  <pre><code>$ go doc -all ./solution | head -20
+<span class="com">package money // import "example.com/moneylib/solution"</span>
+
+<span class="com">// Package money provides currency-safe monetary arithmetic using minor</span>
+<span class="com">// units, teaching integer-vs-float precision, table-driven tests, and</span>
+<span class="com">// fuzzing.</span>
+...</code></pre>
+  <p>In Go, doc comments aren't supplementary prose — they're rendered by <code>go doc</code> and
+     pkg.go.dev into the interface users actually read, so imprecise wording becomes imprecise
+     behavior in the reader's mind. This library treats them as specifications. The package comment
+     states the no-floats guarantee. <code>Amount</code>'s comment warns that the zero value is not
+     a valid monetary amount. <code>String</code>'s comment promises canonical output with
+     zero-padded fraction digits <em>so that String round-trips through ParseAmount</em> — turning
+     the fuzz property into published contract. <code>ParseAmount</code>'s comment enumerates the
+     rejection rules, including the exact-digit requirement. Writing these comments first forces
+     the design questions early ("what <em>does</em> Alloc do with −5?"), and the tests then exist
+     to keep the documentation honest. Contract in prose, proof in code, confidence in the fuzzer.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Property-based thinking: invariants, not examples</h3>
+  <p>The suite pairs every example-style table with a property that must hold for
+     <em>all</em> inputs. Two carry the library's core promises:</p>
+  <pre><code><span class="com">// Property 1 — String ∘ Parse is identity (FuzzParseAmount)</span>
+b, err := ParseAmount(a.<span class="fn">String</span>())
+<span class="kw">if</span> err != <span class="kw">nil</span> || a != b { t.<span class="fn">Fatalf</span>(...) }
+
+<span class="com">// Property 2 — Sub inverts Add (FuzzAdd)</span>
+sum, err := a.<span class="fn">Add</span>(b)
+<span class="kw">if</span> err != <span class="kw">nil</span> { t.<span class="fn">Skip</span>() }
+back, _ := sum.<span class="fn">Sub</span>(b)
+<span class="kw">if</span> back != a { t.<span class="fn">Fatalf</span>(<span class="str">"(a+b)-b = %v, want %v"</span>, back, a) }</code></pre>
+  <p>Notice what the properties do <em>not</em> do: they don't hard-code expected outputs. They
+     assert relationships that must hold universally, which means every random input the fuzzer
+     invents becomes a fresh test case with a known correct answer derived from the library
+     itself. The skips are load-bearing: "this input is out of domain" is a different outcome from
+     "this input broke the invariant," and conflating them either floods you with false failures
+     or buries real ones.</p>
+
+  <h3>Pinned edges: the inputs designed to hurt</h3>
+  <pre><code><span class="com">// Expected literal computed by hand:</span>
+<span class="com">// |MinInt64| = 9223372036854775808 minor = 92233720368547758 major + .08</span>
+got := NewAmount(math.<span class="typ">MinInt64</span>, USD).<span class="fn">String</span>()
+want := <span class="str">"-92233720368547758.08 USD"</span></code></pre>
+  <p>Some inputs deserve a pinned, hand-computed expectation even alongside a property, because
+     they sit exactly where implementations traditionally die: <code>MinInt64</code> for sign
+     handling and overflow, <code>MaxInt64×1</code> vs <code>(MaxInt64/2+1)×2</code> for the
+     overflow boundary, <code>MinInt64×−1</code> (overflow!) next to <code>MinInt64×1</code> (fits).
+     Exponent variety is pinned the same way — the format tables include JPY rows
+     (<code>"123456 JPY"</code>, no dot ever) beside BHD rows (<code>"0.001 BHD"</code>, three
+     digits), so an implementation hardwired for two decimals fails visibly rather than
+     incidentally. Hand-computing the expected literal is deliberate: it prevents the test from
+     merely echoing whatever the implementation does.</p>
+
+  <h3>Exactly-exponent digits: why "1.5 USD" must fail</h3>
+  <pre><code><span class="kw">if</span> len(fracPart) != c.Exponent {
+    <span class="kw">return</span> Amount{}, fmt.<span class="fn">Errorf</span>(
+        <span class="str">"money: ParseAmount(%q): %s needs exactly %d fractional digits, got %q"</span>,
+        s, c.Code, c.Exponent, numStr)
+}</code></pre>
+  <p>The strictest rule in the parser looks like hostility and is actually the thing that makes
+     the round-trip property possible. If <code>"1.5 USD"</code> were accepted, what minor count
+     should it produce — 15? 150? Either choice invents a scaling the user didn't state, and then
+     <code>String</code> renders <code>"0.15 USD"</code> or <code>"1.50 USD"</code> — a different
+     string than the input, and the round-trip property dies. By requiring the fraction width to
+     equal the currency exponent exactly, the grammar becomes <em>canonical</em>: one string per
+     Amount, one Amount per string, bijection guaranteed by construction rather than by
+     normalization heuristics. The rejection table enforces it from both directions
+     (<code>"1.234 USD"</code> too many, <code>"1.2 USD"</code> too few,
+     <code>"1.5 JPY"</code> absurd) and even pins the case analysis in error messages. Strictness
+     at the boundary bought simplicity everywhere else.</p>
+
+  <h3>Brute-force invariants: Alloc's exhaustive grid</h3>
+  <pre><code><span class="kw">for</span> _, c := <span class="kw">range</span> []Currency{USD, EUR, JPY, BHD} {
+    <span class="kw">for</span> _, total := <span class="kw">range</span> []<span class="typ">int64</span>{<span class="num">7</span>, <span class="num">100</span>, <span class="num">12345</span>, -<span class="num">5</span>, -<span class="num">12345</span>, <span class="num">1</span>} {
+        <span class="kw">for</span> n := <span class="num">1</span>; n &lt;= <span class="num">7</span>; n++ {
+            <span class="com">// assert: len(parts) == n, each part == base (+step if earliest),</span>
+            <span class="com">//         and sum(parts) == total</span>
+        }
+    }
+}</code></pre>
+  <p><code>Alloc</code> gets the suite's densest treatment because its failure modes are quiet: a
+     one-cent drift in a split reconciles fine today and corrupts ledgers over months. Rather than
+     trusting a handful of examples, the test enumerates the full small grid — 168 combinations —
+     and checks the strongest available invariant on each: the parts reassemble into the original
+     amount exactly, and the remainder lands on the earliest indices per the documented convention,
+     with negative totals exercising the signed-remainder branch. Between the exhaustive grid, the
+     hand-pinned extremes, and two running fuzzers, the suite covers the classic testing trinity:
+     examples teach the reader, edges catch known cliffs, properties patrol everything in between.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>Money-as-integers in Go isn't a pedagogical pose — it's how some of the largest financial
+       systems on the internet are built:</p>
+    <ul>
+      <li><strong>Stripe</strong> — the payments platform's backend heritage is famously
+          Go-heavy, dating to before Go was fashionable; its APIs quote every amount as an
+          <em>integer in the smallest currency unit</em> (the <code>amount</code> parameter is
+          cents for USD), which is exactly the <code>minor</code> field of this project exposed to
+          the public internet.</li>
+      <li><strong>Coinbase</strong> — a major crypto exchange built substantially on Go, where a
+          rounding error is measured in basis points of other people's assets; integer minor-unit
+          accounting and explicit overflow discipline are survival traits, not preferences.</li>
+      <li><strong>Monzo</strong> — the UK digital bank runs its core banking on a large Go
+          microservices estate, processing millions of ledger entries daily; the
+          "immutable value + exact integer + explicit error" shape of this library is recognizably
+          the shape of its transaction primitives.</li>
+      <li><strong>ISO 4217 everywhere</strong> — card networks, PSPs, and open-banking APIs
+          (including PSD2's) model currency as code-plus-minor-units; the
+          <code>Currency{Code, Exponent}</code> struct in this project is a faithful miniature of
+          how the standard itself distinguishes USD (2), JPY (0), and BHD (3).</li>
+    </ul>
+  </div>
+
+  <h3>Why minor units won</h3>
+  <ol>
+    <li><strong>Binary floats can't hold decimal money.</strong> Every currency amounts system that
+        started on <code>double</code> has accumulated reconciliation horror stories — cent-level
+        drift appearing from nowhere because 0.1 has no exact binary representation. Integer minor
+        units make every value exact and every comparison meaningful; that's why Stripe's API,
+        settlement files, and virtually every core ledger speak integers.</li>
+    <li><strong>Fixed-width forces honesty about limits.</strong> Arbitrary-precision types are
+        wonderful until a hot path allocates one per operation. Production payment cores prefer
+        <code>int64</code> precisely because it can overflow — forcing the explicit checks this
+        project practices with <code>bits.Mul64</code>. The constraint is the feature: bounded
+        values, cache-friendly comparisons, and bugs that surface as errors instead of slow
+        memory pressure.</li>
+    <li><strong>When decimals are truly required, the ecosystem has an answer.</strong> FX rates,
+        interest accrual, and tax computations genuinely need fractional intermediate values —
+        that's the territory of <strong>shopspring/decimal</strong>, the standard Go fallback,
+        which stores coefficients as big integers with an explicit exponent (notice: still no
+        binary floats). Knowing <em>when</em> to reach for it — and that even it is integer math
+        underneath — is the payoff of building the simple case by hand.</li>
+  </ol>
+  <p>The through-line: an <code>int64</code> of cents, a struct pairing code with exponent, and
+     errors that refuse to fabricate sums are not teaching simplifications. They're the skeleton of
+     real payment infrastructure — exercised here in ~250 lines, with a fuzzer standing guard over
+     every promise the docs make.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="03-loglens.html">&larr; Previous: loglens</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 04 of 16</span>
+  <a class="btn" href="05-gopherfetch.html">Next: gopherfetch &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
