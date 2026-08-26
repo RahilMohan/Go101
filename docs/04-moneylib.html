@@ -344,7 +344,7 @@
         <code>[-3, -2]</code>.</li>
     <li><strong>R6 — Alloc rejects non-positive n.</strong> n = 0, −1, −7 each return an error.</li>
     <li><strong>R7 — String is canonical per exponent.</strong> <code>123456</code> USD renders
-        <code>"1234.56 USD"</code>; <code>-1250</code> EUR renders <code>"-12.50 EUR"</code>;
+        <code>"1234.56 USD"</code>; <code>-1250</code> USD renders <code>"-12.50 USD"</code>;
         <code>123456</code> JPY renders <code>"123456 JPY"</code>; fractional digits are zero-padded
         to full exponent width; <code>NewAmount(math.MinInt64, USD).String()</code> equals
         <code>"-92233720368547758.08 USD"</code> exactly (<code>TestStringFormats</code>,
@@ -564,11 +564,12 @@ maxMag := <span class="typ">uint64</span>(math.<span class="typ">MaxInt64</span>
      with BHD?" the answer is visible as rows, not buried in procedural assertions.</p>
 
   <h3>Fuzzing in Go — properties attacked at scale</h3>
-  <pre><code><span class="kw">func</span> <span class="fn">FuzzParseAmount</span>(f *testing.F) {
-    f.<span class="fn">Add</span>(<span class="str">"1234.56 USD"</span>)          <span class="com">// seed corpus: known-good</span>
-    f.<span class="fn">Add</span>(<span class="str">"-12.00 EUR"</span>)
-    f.<span class="fn">Add</span>(<span class="str">""</span>)                     <span class="com">// seed corpus: known-bad</span>
-    f.<span class="fn">Add</span>(<span class="str">"1.234 USD"</span>)
+<pre><code><span class="kw">func</span> <span class="fn">FuzzParseAmount</span>(f *testing.F) {
+     <span class="com">// ... 9 seeds total, two separate error branches — abridged</span>
+     f.<span class="fn">Add</span>(<span class="str">"1234.56 USD"</span>)          <span class="com">// seed corpus: known-good</span>
+     f.<span class="fn">Add</span>(<span class="str">"-12.00 EUR"</span>)
+     f.<span class="fn">Add</span>(<span class="str">""</span>)                     <span class="com">// seed corpus: known-bad</span>
+     f.<span class="fn">Add</span>(<span class="str">"1.234 USD"</span>)
     f.<span class="fn">Fuzz</span>(<span class="kw">func</span>(t *testing.T, s <span class="typ">string</span>) {
         a, err := ParseAmount(s)
         <span class="kw">if</span> err != <span class="kw">nil</span> {
