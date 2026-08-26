@@ -46,6 +46,7 @@ package tagforge
 import (
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -158,15 +159,15 @@ func compileConstraints(path, tag string) (constraints, error) {
 		case "oneof":
 			c.allowed = strings.Split(rc.arg, "|")
 		case "min":
-			n, perr := strconv.ParseFloat(rc.arg, 64)
+			n, perr := parseStrictNumber(path, "min", rc.arg)
 			if perr != nil {
-				return c, fmt.Errorf("field %s: min=%q is not a number", path, rc.arg)
+				return c, perr
 			}
 			c.minSet, c.min = true, n
 		case "max":
-			n, perr := strconv.ParseFloat(rc.arg, 64)
+			n, perr := parseStrictNumber(path, "max", rc.arg)
 			if perr != nil {
-				return c, fmt.Errorf("field %s: max=%q is not a number", path, rc.arg)
+				return c, perr
 			}
 			c.maxSet, c.max = true, n
 		}
@@ -174,28 +175,45 @@ func compileConstraints(path, tag string) (constraints, error) {
 	return c, nil
 }
 
+// parseStrictNumber accepts only plain decimal numbers for min/max:
+// strconv.ParseFloat alone would also admit NaN, Inf, hex floats
+// ("0x1p3"), and underscores — none of which belong in a validation
+// tag. Anything but a plain decimal is rejected at build time.
+func parseStrictNumber(path, name, arg string) (float64, error) {
+	if strings.ContainsAny(strings.ToLower(arg), "xni_") {
+		return 0, fmt.Errorf("field %s: %s=%q is not a plain decimal number", path, name, arg)
+	}
+	n, err := strconv.ParseFloat(arg, 64)
+	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+		return 0, fmt.Errorf("field %s: %s=%q is not a plain decimal number", path, name, arg)
+	}
+	return n, nil
+}
+
 // checkApplicable fails closed when a constraint cannot make sense for
 // the field's type — e.g. email on an int — instead of silently doing
 // nothing at validation time.
+// checkApplicable validates EACH constraint family independently
+// against the field's kind at build time — so a co-resident inapplicable
+// constraint (e.g. "min=1,email" on an int) is rejected up front instead
+// of failing spuriously at validation time.
 func checkApplicable(path string, t reflect.Type, c constraints) error {
-	hasMinMax := c.minSet || c.maxSet
-	switch {
-	case !hasMinMax && !c.email && len(c.allowed) == 0:
-		return nil // required/nonzero apply to any type
-	case hasMinMax:
-		switch t.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			reflect.Float32, reflect.Float64,
-			reflect.String, reflect.Map, reflect.Slice, reflect.Array:
-			return nil
-		}
-	case c.email || len(c.allowed) > 0:
-		if t.Kind() == reflect.String {
-			return nil
-		}
+	notApplicable := func(name string) error {
+		return fmt.Errorf("field %s: constraint %q not applicable to %s", path, name, t)
 	}
-	return fmt.Errorf("field %s: constraint not applicable to %s", path, t)
+	if c.minSet && !numericKind(t.Kind()) && !lengthKind(t.Kind()) {
+		return notApplicable("min")
+	}
+	if c.maxSet && !numericKind(t.Kind()) && !lengthKind(t.Kind()) {
+		return notApplicable("max")
+	}
+	if c.email && t.Kind() != reflect.String {
+		return notApplicable("email")
+	}
+	if len(c.allowed) > 0 && t.Kind() != reflect.String {
+		return notApplicable("oneof")
+	}
+	return nil // required/nonzero apply to any type
 }
 
 // ---------------------------------------------------------------------------
@@ -266,16 +284,9 @@ func buildStructPlan(t reflect.Type, prefix string) (*structPlan, error) {
 		fp := fieldPlan{idx: []int{i}, path: path, isPtr: isPtr}
 
 		if ft.Kind() == reflect.Struct {
-			// Named nested struct (or embedded pointer-to-struct):
-			// compile its subtree; the wrapper's own tag may only use
-			// required/nonzero.
-			subPrefix := path + "."
-			if f.Anonymous {
-				// Embedded pointer promotes too; its inner paths are top-level.
-				subPrefix = prefix
-				fp.path = ""
-			}
-			sub, err := buildStructPlan(ft, subPrefix)
+			// Named nested struct: compile its subtree; the wrapper's
+			// own tag may only use required/nonzero.
+			sub, err := buildStructPlan(ft, path+".")
 			if err != nil {
 				return nil, err
 			}
@@ -369,6 +380,16 @@ func numValue(fv reflect.Value) float64 {
 	default:
 		return fv.Float()
 	}
+}
+
+func numericKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
 }
 
 func lengthKind(k reflect.Kind) bool {

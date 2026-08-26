@@ -296,6 +296,58 @@ func TestUnknownConstraint(t *testing.T) {
 	if _, err := BuildSchema(reflect.TypeOf(badKind{})); err == nil {
 		t.Fatal("BuildSchema must reject email constraint on non-string field")
 	}
+	if err := Validate(badKind{}); err == nil {
+		t.Fatal("Validate must fail closed on inapplicable constraint")
+	}
+
+	// EACH family must be checked independently, even when co-resident
+	// with an applicable one — min=1 is fine on int, email is not.
+	type badCombo struct {
+		Z int `validate:"min=1,email"`
+	}
+	_, err = BuildSchema(reflect.TypeOf(badCombo{}))
+	if err == nil {
+		t.Fatal("BuildSchema must reject co-resident min+email on int")
+	}
+	if !strings.Contains(err.Error(), "email") {
+		t.Errorf("error should name the offending email constraint, got: %v", err)
+	}
+	if err := Validate(badCombo{}); err == nil {
+		t.Fatal("Validate must also fail closed on co-resident min+email")
+	}
+
+	type badCombo2 struct {
+		Y int `validate:"max=5,oneof=a|b"`
+	}
+	_, err = BuildSchema(reflect.TypeOf(badCombo2{}))
+	if err == nil {
+		t.Fatal("BuildSchema must reject co-resident max+oneof on int")
+	}
+	if !strings.Contains(err.Error(), "oneof") {
+		t.Errorf("error should name the offending oneof constraint, got: %v", err)
+	}
+}
+
+func TestStrictNumberParsing(t *testing.T) {
+	rejected := []string{"nan", "NaN", "inf", "-Inf", "Infinity", "0x1p3", "1_000", "1e309"}
+	for _, arg := range rejected {
+		typ := reflect.StructOf([]reflect.StructField{
+			{Name: "N", Type: reflect.TypeOf(0), Tag: reflect.StructTag(`validate:"min=` + arg + `"`)},
+		})
+		if _, err := BuildSchema(typ); err == nil {
+			t.Errorf("BuildSchema must reject min=%q", arg)
+		}
+	}
+
+	accepted := []string{"0", "-3", "+5", ".5", "1.5e-3"}
+	for _, arg := range accepted {
+		typ := reflect.StructOf([]reflect.StructField{
+			{Name: "N", Type: reflect.TypeOf(0), Tag: reflect.StructTag(`validate:"min=` + arg + `"`)},
+		})
+		if _, err := BuildSchema(typ); err != nil {
+			t.Errorf("BuildSchema should accept min=%q, got %v", arg, err)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
