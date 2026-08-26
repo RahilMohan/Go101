@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Go101 · Project 01 — wordkit</title>
+<script>document.documentElement.classList.add('js');</script>
 <style>
   :root {
     --bg: #0d1117;
@@ -178,17 +179,21 @@
   /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
   @media (prefers-reduced-motion: no-preference) {
 
-    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible) */
-    .reveal {
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
       opacity: 0;
       transform: translateY(24px);
-      transition: opacity 600ms ease-out, transform 600ms ease-out;
     }
     .reveal.visible {
       opacity: 1;
       transform: translateY(0);
     }
-    .reveal:nth-of-type(odd) { transition-delay: 40ms; }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
 
     /* Subtle gradient pulse on the header tier badge */
     @keyframes badge-pulse {
@@ -212,6 +217,11 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
     * { transition: none !important; animation: none !important; }
   }
 </style>
@@ -238,8 +248,8 @@
 <section class="reveal">
   <h2><span class="sec-num">01</span>Stack Evaluation</h2>
   <h3>The stack: pure standard library</h3>
-  <p>wordkit uses exactly four stdlib packages — <code>os</code>, <code>bufio</code>, <code>flag</code>,
-     and <code>io</code> — plus <code>fmt</code> and <code>unicode</code>. No third-party dependencies,
+  <p>wordkit uses six stdlib packages — <code>os</code>, <code>bufio</code>, <code>flag</code>,
+     <code>io</code>, <code>fmt</code>, and <code>unicode</code>. No third-party dependencies,
      no <code>go get</code>, no module proxy round-trips. This is deliberate: project 01 is your first
      Go program, and every import you don't recognize is friction between you and the language.</p>
 
@@ -250,8 +260,10 @@
     <tbody>
       <tr><td><code>os</code></td><td><code>os.Stdin</code>, <code>os.Open</code>, <code>os.Exit</code>, stderr</td><td>Files are just Readers; exit codes communicate failure to shells</td></tr>
       <tr><td><code>bufio</code></td><td>Buffered rune reading over any Reader</td><td>Streaming I/O with constant memory</td></tr>
-      <tr><td><code>flag</code></td><td><code>-l -w -c -m</code> column flags</td><td>The standard CLI argument contract</td></tr>
+      <tr><td><code>flag</code></td><td><code>-l -w -c -m</code> column flags</td><td>The stdlib flag contract (see caveats below)</td></tr>
       <tr><td><code>io</code></td><td><code>io.Reader</code>, <code>io.EOF</code></td><td><strong>The central abstraction of Go I/O</strong></td></tr>
+      <tr><td><code>fmt</code></td><td>Formatted output and error wrapping (<code>Errorf</code>/<code>%w</code>)</td><td>Verbs, wrapping, and writing to any Writer</td></tr>
+      <tr><td><code>unicode</code></td><td><code>unicode.IsSpace</code> word splitting</td><td>Rune-based classification beats byte hacks</td></tr>
     </tbody>
   </table>
 
@@ -315,8 +327,11 @@
 
   <h3>Non-functional</h3>
   <ul>
-    <li><strong>NF1 — Constant memory.</strong> The 10,000-line large-input test proves streaming:
-      memory must not scale with input size.</li>
+    <li><strong>NF1 — Constant memory.</strong> The 10,000-line large-input test feeds an
+      in-memory <code>strings.Reader</code>, so it proves correctness at volume — not the
+      constant-memory property itself. That property holds (verified empirically: piping 100 MB
+      through the CLI keeps RSS roughly flat), but it is a design property of the streaming loop,
+      not something this test demonstrates.</li>
     <li><strong>NF2 — Errors propagate checkably, stats zeroed.</strong> A failing reader
       must surface via <code>errors.Is</code>, and <code>Analyze</code> must return zeroed stats
       together with the error — never partial counts from before the failure.</li>
@@ -373,12 +388,14 @@
       replaces buffering the last line.</p>
 
   <h3>D5: Library + cmd split</h3>
-  <pre><code>projects/01-wordkit/
-├── wordkit.go            <span class="com"># package wordkit — stubs you implement</span>
-├── wordkit_test.go       <span class="com"># the executable spec</span>
+   <pre><code>projects/01-wordkit/
+├── go.mod                  <span class="com"># module definition — no proxy round-trip needed</span>
+├── wordkit.go              <span class="com"># package wordkit — stubs you implement</span>
+├── wordkit_test.go         <span class="com"># the executable spec</span>
+├── cmd/wordkit/main.go     <span class="com"># stub CLI wiring you flesh out</span>
 └── solution/
-    ├── solution.go       <span class="com"># package solution — reference Analyze/Format</span>
-    └── cmd/wordkit/main.go   <span class="com"># thin CLI wiring</span></code></pre>
+    ├── solution.go         <span class="com"># package solution — reference Analyze/Format</span>
+    └── cmd/wordkit/main.go <span class="com"># reference thin CLI wiring</span></code></pre>
   <p>All logic lives in the library package; <code>main</code> only parses flags, opens files, and
      formats output. This makes the counting logic testable without spawning processes, and models
      the layout real Go CLIs use (<code>docker/cli</code>, <code>gh</code> — see sidebar).</p>
@@ -388,6 +405,27 @@
      but keeps processing remaining files — then exits 1 at the end. Files are closed immediately
      after analysis via <code>f.Close()</code>, even on the error path, so a many-file invocation
      never leaks descriptors.</p>
+
+  <h3>CLI contract caveats, honestly stated</h3>
+  <ul>
+    <li><strong>No flag bundling.</strong> Go's <code>flag</code> package treats <code>-lw</code>
+        as an undefined flag: it prints usage and exits with status 2 (parse errors exit 2; file
+        errors exit 1). Unix tools like <code>wc -lw</code> bundle short flags; wordkit's stdlib
+        contract does not.</li>
+    <li><strong>Filenames pass through verbatim.</strong> A file's name is printed as-is next to
+        its stats — including any ANSI escape sequences or newlines it contains. This is byte-identical
+        to GNU <code>wc</code>'s behavior, so it is a property of the wc-style output contract,
+        not a bug — but see the callout below before piping this tool's output anywhere.</li>
+  </ul>
+  <div class="callout">
+    <p><strong>Security note — untrusted filenames corrupt line-oriented consumers.</strong>
+       Because operand names are emitted raw into stdout and stderr, a filename like
+       <code>$'bad\n12345678 98765432 fake.txt'</code> can splice a forged stats row into the
+       output of <code>wordkit *.txt | parser</code>, and escape sequences render in terminals
+       that display it. If you harden a wc-like tool for hostile input, quote names
+       (<code>%q</code>) or emit a structured format (JSON) — accepting the deviation from
+       wc-compatible output.</p>
+  </div>
 </section>
 
 <!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
@@ -407,8 +445,13 @@
   <pre><code><span class="com">// from stdin (main.go):</span>
 solution.<span class="fn">Analyze</span>(os.Stdin)
 
-<span class="com">// from a file (main.go):</span>
-f, _ := os.<span class="fn">Open</span>(name)
+<span class="com">// from a file (main.go) — open errors are reported, not ignored:</span>
+f, err := os.<span class="fn">Open</span>(name)
+<span class="kw">if</span> err != <span class="kw">nil</span> {
+    fmt.<span class="fn">Fprintln</span>(os.Stderr, <span class="str">"wordkit:"</span>, err)
+    failed = <span class="kw">true</span>
+    <span class="kw">continue</span> <span class="com">// other files still process (D6)</span>
+}
 solution.<span class="fn">Analyze</span>(f)
 
 <span class="com">// from a test fixture (wordkit_test.go):</span>
@@ -431,11 +474,17 @@ solution.<span class="fn">Analyze</span>(f)
         ordinary value comparison:
         <pre><code><span class="kw">if</span> err == io.EOF {
     <span class="kw">break</span>
-}</code></pre></li>
+}</code></pre>
+        Caveat: direct <code>==</code> comparison is only safe because <code>bufio.Reader</code>
+        returns <code>io.EOF</code> unwrapped. In general — and anywhere wrapping (<code>%w</code>)
+        might be involved — prefer the chain-aware form
+        <code>errors.Is(err, io.EOF)</code>, which is what production code should reach for first.</li>
     <li><strong>Wrapping with context.</strong> Rather than returning a bare upstream error,
         <code>Analyze</code> adds provenance:
-        <pre><code><span class="kw">return</span> s, fmt.<span class="fn">Errorf</span>(<span class="str">"wordkit: read: %w"</span>, err)</code></pre>
-        The <code>%w</code> verb wraps the original error inside the new one, preserving the chain.</li>
+        <pre><code><span class="kw">return</span> Stats{}, fmt.<span class="fn">Errorf</span>(<span class="str">"wordkit: read: %w"</span>, err)</code></pre>
+        The <code>%w</code> verb wraps the original error inside the new one, preserving the chain.
+        Note the zero-value <code>Stats{}</code> — on failure the partial counts accumulated so far
+        are discarded, exactly as NF2 requires (see D3 above).</li>
     <li><strong>Checking chains with errors.Is.</strong> Callers never parse message strings; they
         interrogate the chain:
         <pre><code><span class="kw">if</span> !errors.<span class="fn">Is</span>(err, sentinel) { ... }</code></pre>
@@ -515,11 +564,14 @@ args := flag.<span class="fn">Args</span>() <span class="com">// positional args
 <span class="kw">type</span> <span class="typ">errReader</span> <span class="kw">struct</span>{ err <span class="typ">error</span> }
 
 <span class="kw">func</span> (r errReader) <span class="fn">Read</span>([]<span class="typ">byte</span>) (<span class="typ">int</span>, <span class="typ">error</span>) { <span class="kw">return</span> <span class="num">0</span>, r.err }</code></pre>
-  <p>Nine lines, no mocks framework. Because <code>Analyze</code> accepts any <code>io.Reader</code>,
+  <p>Four lines, no mocks framework. Because <code>Analyze</code> accepts any <code>io.Reader</code>,
      the test injects failure at the exact boundary where real I/O would fail. The assertions check
      two things: the sentinel survives wrapping (<code>errors.Is</code>) and no misleading partial
-     stats leak out (<code>Bytes == 0</code>). This test is unpassable until your implementation
-     wraps errors correctly — it's the executable form of lesson "error as value."</p>
+     stats leak out — a full-struct compare against the zero value (<code>stats != (Stats{})</code>),
+     not a spot-check of one field. A companion test (<code>TestAnalyzeMidReadErrorZeroesPartialStats</code>)
+     feeds some data first, then fails, pinning that partial counts are zeroed even mid-stream.
+     These tests are unpassable until your implementation wraps errors correctly — they're the
+     executable form of lesson "error as value."</p>
 
   <h3>Scale as a test case</h3>
   <p><code>TestAnalyzeLargeInput</code> builds a ~340 KB synthetic input (10,000 formatted lines)
@@ -531,6 +583,11 @@ args := flag.<span class="fn">Args</span>() <span class="com">// positional args
   <p><code>TestFormat</code> verifies the <code>%8d</code> column contract independently of analysis,
      using asymmetric values (12 / 3456 / 789012 / 34) that expose padding mistakes. Small, boring,
      essential: formatting regressions are user-visible and trivially cheap to catch.</p>
+  <p><strong>Known limitation:</strong> <code>%8d</code> pads but never truncates, so any count of
+     nine or more digits fuses adjacent columns with zero separating spaces
+     (<code>Format</code> of nine-digit values yields one long digit run). GNU <code>wc</code>
+     shares this exact property, so wordkit matches its contract — just don't assume the output is
+     safely machine-parsable at ≥10⁹ counts.</p>
 </section>
 
 <!-- ===================== 6. GO IN THE WILD ===================== -->
