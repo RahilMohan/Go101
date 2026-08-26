@@ -23,6 +23,7 @@ var (
 type StreamParser struct {
 	buf    []byte
 	events []StreamEvent
+	lines  int // complete lines extracted so far
 }
 
 // NewStreamParser returns an empty parser.
@@ -41,6 +42,12 @@ func (p *StreamParser) Feed(chunk string) error {
 		}
 		line := string(p.buf[:i])
 		p.buf = p.buf[i+1:]
+		// Tolerate a UTF-8 BOM prepended by some HTTP endpoints; only the
+		// very first line can carry it.
+		if p.lines == 0 {
+			line = strings.TrimPrefix(line, "\xEF\xBB\xBF")
+		}
+		p.lines++
 		if err := p.parseLine(line); err != nil {
 			return err
 		}

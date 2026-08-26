@@ -36,6 +36,7 @@ const (
 	EventText     StreamEventType = "text"      // incremental assistant text
 	EventToolCall StreamEventType = "tool_call" // model requests a tool run
 	EventFinal    StreamEventType = "final"     // final answer; loop may stop
+	EventError    StreamEventType = "error"     // terminal stream failure (wrapped parse/read error)
 )
 
 // ToolCall is a single tool invocation requested by the model.

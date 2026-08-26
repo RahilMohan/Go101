@@ -33,6 +33,7 @@ const (
 	EventText     StreamEventType = "text"      // incremental assistant text
 	EventToolCall StreamEventType = "tool_call" // model requests a tool run
 	EventFinal    StreamEventType = "final"     // final answer; loop may stop
+	EventError    StreamEventType = "error"     // terminal stream failure (wrapped parse/read error)
 )
 
 // ToolCall is a single tool invocation requested by the model.
@@ -135,15 +136,34 @@ func (p *RealProvider) Stream(ctx context.Context, req Request) (<-chan StreamEv
 			return true
 		}
 		sc := bufio.NewScanner(resp.Body)
+		// Raise the line cap well above bufio's 64KB default so large
+		// NDJSON events stream instead of silently truncating.
+		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		fail := func(err error) bool {
+			select {
+			case ch <- StreamEvent{Type: EventError, Text: err.Error()}:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
 		for sc.Scan() {
 			if err := parser.Feed(sc.Text() + "\n"); err != nil {
+				_ = push() // flush events decoded before the failure
+				fail(fmt.Errorf("gopherpilot: parse stream: %w", err))
 				return
 			}
 			if !push() {
 				return
 			}
 		}
+		if err := sc.Err(); err != nil {
+			_ = push()
+			fail(fmt.Errorf("gopherpilot: read stream: %w", err))
+			return
+		}
 		parser.Feed("\n") // flush is a no-op; boundary check only
+		_ = push()
 	}()
 	return ch, nil
 }
