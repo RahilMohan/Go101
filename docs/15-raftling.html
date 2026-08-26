@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 15 — raftling</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>raftling</h1>
+  <p class="subtitle">Go101 · Project 15 — mini Raft-replicated key/value cluster</p>
+  <div class="badge-row">
+    <span class="badge tier">Expert Tier</span>
+    <span class="badge">consensus</span>
+    <span class="badge">leader election</span>
+    <span class="badge">log replication</span>
+    <span class="badge">actor pattern</span>
+    <span class="badge">fault injection</span>
+    <span class="badge">semver · CI</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: channels, an in-memory bus, and the Raft paper</h3>
+  <p>raftling implements leader election, log replication, and commit advancement
+     using nothing but stdlib primitives: goroutines and channels for the node event
+     loop, an in-memory <code>Hub</code> message bus standing in for the network,
+     and <code>math/rand</code> for election jitter. No RPC framework, no gRPC, no
+     <code>go.sum</code>. The transport is a two-method interface —
+     <code>Send(m Message)</code> and <code>Recv() &lt;-chan Message</code> — which is
+     the entire seam between the consensus logic and any real network you might bolt
+     on later.</p>
+  <table>
+    <thead>
+      <tr><th>Piece</th><th>Role in raftling</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>chan Message</code> + one goroutine per node</td><td>The entire concurrency model: every inbound message, client request, election tick, and heartbeat is serialized through a single <code>select</code> loop that owns all Raft state</td><td>An actor loop turns "protect shared state with locks" into "only one goroutine ever touches it" — at teaching scale this eliminates whole categories of data races by construction</td></tr>
+      <tr><td><code>Hub</code> (in-memory bus)</td><td>Routes <code>Message.To</code> to private buffered inboxes; models an unreliable network that can drop on full buffers and close under shutdown</td><td>A real network <em>is</em> an asynchronous channel with extra failure modes — modeling it as one makes Raft's assumptions explicit and testable</td></tr>
+      <tr><td><code>FaultTransport</code> wrapper</td><td>Deterministic drop/delay/reorder policies injected around any transport, mutable while the cluster runs</td><td>Fault injection as a first-class API beats sleep-and-pray testing: partitions become one-line, race-free, reproducible scenario toggles</td></tr>
+      <tr><td><code>Clock</code>/<code>*rand.Rand</code> injection</td><td>Timers and election jitter come from injectable sources so schedules can be pinned</td><td>Consensus tests fail flaky when time and randomness are ambient dependencies; making them parameters is what buys determinism</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>Real-network Raft libraries (<code>hashicorp/raft</code>,
+        <code>etcd-io/raft</code>)</strong> — the production answers, and deliberately
+        not used here. <code>etcd/io</code>'s library doesn't even own its transport or
+        storage: it hands you <code>Ready</code> structs and expects <em>you</em> to wire
+        I/O — which is exactly the work this project exists to teach from scratch. Using
+        either library would replace the lesson (why terms exist, why the commit rule has
+        a term check, what a step-down actually is) with configuration and glue.</li>
+    <li><strong>TCP/gRPC transports instead of an in-memory hub</strong> — tempting for
+        realism, fatal for testing. Real sockets make timing ambient, ports contended,
+        and failure injection coarse. The <code>Transport</code> interface means a TCP
+        implementation could be added without touching a line of consensus code — the
+        boundary proves itself by existing.</li>
+    <li><strong>Mutex-guarded shared Raft state</strong> — the style most tutorials use,
+        and where most tutorial Rafts go subtly wrong. Splitting state across locks
+        invites interleavings no test explores. One goroutine owning everything makes the
+        state machine literally sequential: between two <code>select</code> cases, no
+        other event can be observed.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Consensus from the paper, honestly.</strong> Every subtle rule of Raft
+        §§5.1–5.4 — one vote per term, election restriction on up-to-date logs, the
+        current-term-only commit check that defuses Figure 8, step-down on any higher
+        term — is implemented by hand against the paper's own numbering. Afterward,
+        hashicorp/raft's source reads like documentation rather than archaeology.</li>
+    <li><strong>Actor-style state ownership.</strong> The single-goroutine event loop is
+        Go's answer to "how do I write correct concurrent state machines": don't share
+        memory, serialize events. This pattern recurs everywhere — game loops, protocol
+        stacks, the runtime's own schedulers.</li>
+    <li><strong>Deterministic testing of distributed behavior.</strong> Partitions,
+      drops, reordering, and duplication are usually things you <em>hope</em> your tests
+      stumble into. Here they're API calls with seeded randomness, so the same
+      interleaving reproduces on every machine — and the CI pipeline re-runs the suite
+      three times under the race detector to keep it honest.</li>
+    <li><strong>The module-publishing story.</strong> A <code>go.mod</code>, a semver
+        version, path-filtered GitHub Actions CI, and a README version note — the full
+        lifecycle of shipping a Go module, exercised at the smallest scale it still
+        applies to.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>raft_test.go</code> — the executable specification.
+     If your implementation passes these tests (including <code>-race</code>), it
+     satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Single-node clusters elect themselves and serve KV.</strong> A lone
+        node reaches <code>Leader</code>, accepts <code>Set</code>, and answers
+        <code>Get</code> with the written value — majority arithmetic must degrade
+        gracefully to a cluster of one.</li>
+    <li><strong>R2 — Exactly one leader per term among many nodes.</strong> Three nodes
+        elect a sole leader whose term is stable, and every follower independently
+        acknowledges the same leader ID at a term ≥ the leader's.</li>
+    <li><strong>R3 — One vote per term, even against maximally up-to-date strangers.</strong>
+        A forged "ghost" candidate with a huge log and a higher last-log-term receives
+        zero grants from followers who already voted in the current term — and still gets
+        explicit denials, not silence.</li>
+    <li><strong>R4 — Quorum commits and read-your-writes.</strong> <code>Set</code>
+        returns only after quorum commit; an immediate <code>Get</code> through the
+        leader observes the value (linearizable read barrier). Followers answering
+        <code>Get</code> fail fast with <code>ErrNotLeader</code>.</li>
+    <li><strong>R5 — Partitioned minority serves nobody — no split brain.</strong> With
+        the leader fully isolated, the majority side elects a replacement at a higher
+        term, while the old leader fails both <code>Set</code> and <code>Get</code> with
+        <code>ErrNoQuorum</code>. On heal, it steps down and catches up on replicated
+        state, restoring exactly one leader.</li>
+    <li><strong>R6 — Drops, delays, and reordering preserve commit order.</strong> With
+        35% seeded drop probability plus pair-swap reordering on every link, eight
+        sequential Sets commit and <em>all three replicas converge to exactly the
+        expected map</em> — proving ordered application despite hostile delivery.</li>
+    <li><strong>R7 — Rejoined followers catch up.</strong> A follower black-holed during
+        three commits resynchronizes to the exact committed state once its link heals —
+        the log-matching/backfill path must work without snapshots.</li>
+    <li><strong>R8 — Misconfigured fault policies never kill the process.</strong>
+        Toggling <code>DropProb</code> at runtime with a nil <code>Rand</code> falls back
+        to a deterministic internal source instead of panicking inside the
+        library-owned pump goroutine (where no caller could recover).</li>
+    <li><strong>R9 — Higher-term rejections force immediate step-down.</strong> A leader
+        receiving an <code>AppendEntries</code> rejection stamped with a higher term
+        reverts to <code>Follower</code> at that term — Raft §5.1 applied to the reply
+        path, not just inbound requests.</li>
+    <li><strong>R10 — Inverted timing bounds are normalized, never negative.</strong>
+        <code>WithTiming(hb, 400ms, 300ms, …)</code> swaps the bounds (min=300ms,
+        max=400ms) instead of producing a negative jitter span that would panic
+        <code>rand.Int63n</code>; equal bounds are legal too.</li>
+    <li><strong>R11 — Local backpressure is distinct from lost quorum.</strong> A full
+        request queue yields <code>ErrBusy</code> ("this node is congested"), while an
+        uncommitable request yields <code>ErrNoQuorum</code> after the RPC timeout —
+        callers can tell rerouting apart from waiting.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Determinism where possible.</strong> Per-link seeded
+        <code>rand.Rand</code> streams and injected clocks make fault scenarios
+        reproducible; bounded polling replaces fixed sleeps.</li>
+    <li><strong>NF2 — Race-clean under repetition.</strong> The suite must pass
+        <code>go test -race -count=3 ./solution/...</code> (~20s wall clock) — repetition
+        widens the interleaving window the race detector samples.</li>
+    <li><strong>NF3 — Honest limitations.</strong> The package doc states up front: no
+        persistence or snapshotting, no membership changes, no log compaction. A teaching
+        Raft that hides these cuts would lie about what Raft actually requires.</li>
+    <li><strong>NF4 — CI gates the contract.</strong> Path-filtered workflow runs gofmt,
+        vet, verifies root stub tests <em>fail</em>, and runs the solution suite with
+        <code>-race -count=3</code>.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Actor-per-node — one goroutine owns all Raft state</h3>
+  <pre><code><span class="kw">for</span> {
+    <span class="kw">select</span> {
+    <span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>():
+        <span class="kw">return</span>
+    <span class="kw">case</span> m, ok := &lt;-n.tr.<span class="fn">Recv</span>():
+        ...
+        r.<span class="fn">handleMessage</span>(m)
+    <span class="kw">case</span> req := &lt;-n.reqCh:
+        r.<span class="fn">handleRequest</span>(req)
+    <span class="kw">case</span> &lt;-r.election.<span class="fn">C</span>():
+        ...
+        r.<span class="fn">startElection</span>()
+    <span class="kw">case</span> &lt;-r.hbC:
+        r.<span class="fn">broadcastAppend</span>()
+        ...
+    }
+}</code></pre>
+  <p>The <code>replica</code> struct holds <em>every</em> piece of Raft state — role,
+     term, <code>votedFor</code>, log, <code>commitIndex</code>, per-peer
+     <code>next</code>/<code>match</code>, pending client requests — and exactly one
+     goroutine ever touches it. Inbound network messages, client requests, election
+     timers, and heartbeats arrive as events on four channel arms of one
+     <code>select</code>. The consequence is architectural: there is no lock to forget,
+     no field that needs atomic access, no interleaving where two handlers observe a
+     half-updated term. The few genuinely cross-goroutine surfaces (<code>Status()</code>,
+     <code>Snapshot()</code>, the stopped flag) publish immutable copies under a small
+     mutex — observability, never mutation, crosses the boundary. This is why
+     <code>-race -count=3</code> passes not by luck but by construction.</p>
+
+  <h3>D2: Fault injection as an API, not a sleep schedule</h3>
+  <pre><code>faults[id].<span class="fn">Mutate</span>(<span class="kw">func</span>(p *<span class="typ">Policy</span>) { p.DropAll = <span class="kw">true</span> })
+<span class="com">// ... majority elects replacement, minority fails with ErrNoQuorum ...</span>
+faults[id].<span class="fn">Mutate</span>(<span class="kw">func</span>(p *<span class="typ">Policy</span>) { p.DropAll = <span class="kw">false</span> })</code></pre>
+  <p>Classic distributed-systems tests simulate partitions by killing processes and
+     sleeping through election timeouts — slow, flaky, and unable to produce specific
+     interleavings on demand. raftling instead wraps every node's transport in a
+     <code>FaultTransport</code> whose <code>Policy</code> supports
+     <code>DropAll</code>, probabilistic <code>DropProb</code>, fixed <code>Delay</code>,
+     and pairwise <code>Reorder</code>. Crucially, policies change at runtime only via
+     <code>Mutate</code>, which takes the wrapper's lock — direct writes would race with
+     the message paths. A partition becomes a one-line toggle inside a test, the heal is
+     another toggle, and the entire scenario completes in milliseconds. The wrapper
+     filters both directions (outbound <code>Send</code> and inbound
+     <code>Recv</code> via its pump goroutine), so a "link" down is truly bidirectional.</p>
+
+  <h3>D3: Injectable clock and randomness — determinism as a parameter</h3>
+  <pre><code>p.DropProb = <span class="num">0.35</span>
+p.Reorder = <span class="kw">true</span>
+p.Rand = rand.<span class="fn">New</span>(rand.<span class="fn">NewSource</span>(int64(<span class="num">42</span> + i))) <span class="com">// deterministic per-link stream</span></code></pre>
+  <p>Election timeouts need jitter (otherwise nodes vote in lockstep forever), but
+     ambient <code>math/rand</code> makes failures irreproducible. So jitter comes from an
+     injectable <code>*rand.Rand</code>, and each test link seeds its own stream
+     (<code>42+i</code>): the drop decisions for link <code>n0</code> are identical on
+     every machine, every run. Likewise the <code>Clock</code> interface exists so tests
+     <em>could</em> drive timers by hand. The same principle guards misconfiguration: if
+     <code>DropProb</code> is set but <code>Rand</code> is nil, the fallback derives a
+     source from the wrapper's message counter rather than panicking — because the
+     inbound check runs inside the library-owned pump goroutine, where a panic would take
+     down the whole process with no recover possible.</p>
+
+  <h3>D4: Reads as log entries — the OpRead commit barrier</h3>
+  <pre><code><span class="kw">case</span> reqGet:
+    e := <span class="typ">Entry</span>{
+        Index: r.<span class="fn">lastIndex</span>() + <span class="num">1</span>,
+        Term:  r.term,
+        Op:    <span class="typ">OpRead</span>,   <span class="com">// carries a key, writes nothing</span>
+        Key:   req.key,
+    }
+    r.log = <span class="fn">append</span>(r.log, e)
+    ...</code></pre>
+  <p>A leader answering reads straight from its state machine can serve stale data right
+     after election — it may not yet know which entries are committed. Raft offers
+     read-index protocols and leases; raftling uses the simplest correct form: append an
+     <code>OpRead</code> entry and let it ride the normal replication path. Its reply
+     resolves only in <code>applyCommitted</code> <em>after</em> applying everything
+     through the barrier index, so a successful <code>Get</code> has, by construction,
+     observed all previously acknowledged writes. The cost is real (every read costs a
+     round of replication) and acceptable here — the point is that linearizability came
+     from a mechanism, not a hope. When leadership is lost mid-barrier,
+     <code>stepDown</code> fails all pending requests with <code>ErrNotLeader</code>;
+     when quorum never forms, the client-side timeout answers <code>ErrNoQuorum</code>.
+     An isolated leader therefore serves neither stale writes nor stale reads.</p>
+
+  <h3>D5: An error taxonomy callers can act on</h3>
+  <pre><code><span class="kw">case</span> n.reqCh &lt;- &amp;req:            <span class="com">// enqueue failed within timeout?</span>
+<span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>():
+    <span class="kw">return</span> <span class="str">""</span>, <span class="kw">false</span>, <span class="typ">ErrBusy</span>      <span class="com">// local backpressure — retry/reroute</span>
+...
+<span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>():
+    <span class="kw">return</span> <span class="str">""</span>, <span class="kw">false</span>, <span class="typ">ErrNoQuorum</span>  <span class="com">// enqueued, never committed — wait/heal</span></code></pre>
+  <p>Three sentinel errors divide the failure space by <em>what the caller should do</em>.
+     <code>ErrNotLeader</code>: wrong node, look up the real leader and retry there.
+     <code>ErrNoQuorum</code>: this node believed it led, but the request couldn't commit
+     within the RPC timeout — typically partitioned away from the majority; retrying
+     locally is futile until healing. <code>ErrBusy</code>: the node's local request
+     queue (cap 32) didn't drain within the timeout — pure local congestion, unrelated
+     to cluster health. Collapsing the last two into one "failed" error would send
+     healthy-cluster clients into pointless rerouting during load spikes, and
+     partitioned clients into hammering a dead leader. Error design is API design: the
+     distinctions encode recovery strategies.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Leader election — terms, votes, and the up-to-date restriction</h3>
+  <pre><code>r.term++
+r.state = Candidate
+r.votedFor = r.n.id
+r.votes = map[<span class="typ">string</span>]<span class="typ">bool</span>{r.n.id: <span class="kw">true</span>}
+...
+upToDate := m.LastLogTerm > r.<span class="fn">lastTerm</span>() ||
+    (m.LastLogTerm == r.lastTerm() &amp;&amp; m.LastLogIndex >= r.lastIndex())
+canVote := r.votedFor == <span class="str">""</span> || r.votedFor == m.CandidateID</code></pre>
+  <p>Time is chopped into monotonic <em>terms</em> — logical epochs that make "who is
+     legitimate" decidable without synchronized clocks. A follower whose election timer
+     fires increments the term, votes for itself, and solicits votes. Three rules make
+     the outcome safe. First, <code>votedFor</code> grants at most one vote per term —
+     two leaders in one term would each need a majority, and majorities overlap, so some
+     node would have to vote twice (impossible). Second, the grant condition checks the
+     candidate's log is at least as up-to-date as the voter's (compare last
+     <em>term</em> first, then length): a candidate lacking committed entries can't win,
+     which is precisely why new leaders inherit every committed entry. Third, any
+     message bearing a higher term triggers <code>stepDown</code> generically before the
+     type switch even looks at the message kind — stale candidates watching for their
+     own votes get demoted by the very responses they solicited. Single-node clusters
+     fall out of the same math: majority = 1, so self-vote wins instantly.</p>
+
+  <h3>Log replication — conflict hints and the §5.4.2 commit rule</h3>
+  <pre><code><span class="kw">for</span> idx := r.<span class="fn">lastIndex</span>(); idx > r.commitIndex; idx-- {
+    <span class="kw">if</span> r.log[idx].Term != r.term {
+        <span class="kw">break</span>                        <span class="com">// §5.4.2: only current-term entries</span>
+    }                                 <span class="com">// advance commitIndex directly</span>
+    count := <span class="num">1</span>
+    <span class="kw">for</span> _, p := <span class="kw">range</span> r.n.peerIDs {
+        <span class="kw">if</span> r.match[p] >= idx { count++ }
+    }
+    <span class="kw">if</span> count >= r.<span class="fn">majority</span>() {
+        r.commitIndex = idx
+        ...
+    }
+}</code></pre>
+  <p>Replication is a two-sided negotiation. The leader probes each peer at
+     <code>next[peer]</code>, sending <code>PrevLogIndex</code>/<code>PrevLogTerm</code>
+     as a consistency check: if the follower's log disagrees there, the AppendEntries is
+     rejected — with a <em>conflict hint</em> telling the leader where to jump
+     <code>nextIndex</code> (just past our log if we're too short, else the first index
+     of the conflicting term), so convergence takes one round trip instead of
+     decrement-by-one crawls. Matching prefixes are idempotent — replaying an entry
+     whose term already agrees is a <code>continue</code>, not a duplicate — which is
+     what makes duplicated deliveries harmless. On the leader side sits Raft's most
+     famous subtlety: a replicated-but-old-term entry must not be committed directly,
+     because a majority replica does not imply a majority of the <em>current</em> term
+     has acknowledged it (paper Figure 8: such an entry can be overwritten by a new
+     leader). Hence the <code>break</code> above — old entries commit only
+     <em>indirectly</em>, dragged along when a current-term entry at a higher index
+     reaches quorum. Delete that two-line check and you have a correctness bug no
+     ordinary test will catch; raftling's structure makes the rule impossible to omit
+     silently.</p>
+
+  <h3>Step-down everywhere — including the gap the fleet review caught</h3>
+  <pre><code><span class="kw">func</span> (r *replica) <span class="fn">handleAppendResp</span>(m Message) {
+    <span class="kw">if</span> m.Term > r.term {
+        <span class="com">// Raft §5.1: any message bearing a higher term — including a</span>
+        <span class="com">// rejection of our own AppendEntries — forces a step down.</span>
+        r.<span class="fn">stepDown</span>(m.Term)
+    }
+    <span class="kw">if</span> r.state != Leader || m.Term != r.term {
+        <span class="kw">return</span>
+    }</code></pre>
+  <p>Raft §5.1 says: if any RPC request or <em>response</em> carries a term higher than
+     yours, update yours and become a follower. The easy part is requests —
+     <code>handleMessage</code> steps down on any inbound higher term before dispatch.
+     The subtle part is responses. The original implementation filtered stale replies
+     with an early <code>m.Term != r.term</code> return, which accidentally swallowed
+     <em>higher</em>-term AppendEntries rejections too: a deposed leader rejecting its
+     successor's heartbeats never learned the new term from those replies and kept
+     self-reporting <code>Leader</code> (appending doomed client writes) until its own
+     election timer or fresh inbound traffic corrected it. The adversarial fleet flagged
+     this as a liveness-only deviation — no split brain was possible, since quorum never
+     formed and all such writes failed with <code>ErrNoQuorum</code> — and the fix is
+     the two lines above: inspect the term <em>before</em> filtering. Two regression
+     tests pin it forever: the ghost-voter denial (R3) and
+     <code>TestLeaderStepsDownOnHigherTermAppendResp</code> (R9). The transferable
+     lesson: "check the common case first" filters are exactly where protocol
+     violations hide, because they run before your carefully-written handler logic.</p>
+
+  <h3>Shipping it: semver, module identity, and CI</h3>
+  <pre><code><span class="com"># go.mod</span>
+module go101.dev/projects/15-raftling
+
+go <span class="num">1.22</span>
+
+<span class="com"># .github/workflows/ci.yml (excerpt)</span>
+on:
+  push:
+    paths: [<span class="str">"projects/15-raftling/**"</span>]   <span class="com"># run only when this module changes</span>
+...
+      - name: test (stubs must fail)
+        <span class="fn">run</span>: go test ./... || code=$?; ...   <span class="com"># invert: passing stubs = broken spec</span>
+      - name: solution tests with race detector
+        <span class="fn">run</span>: go test -race -count=<span class="num">3</span> ./solution/...</code></pre>
+  <p>This project doubles as the course's module-publishing lesson. The
+     <code>go.mod</code> establishes an import path — in a real release you'd tag
+     <code>v0.1.0</code> and consumers would <code>go get go101.dev/projects/15-raftling@v0.1.0</code>,
+     with Go's module proxy resolving the semver; breaking API changes require bumping
+     the major and (pre-v2 conventions aside) often the import path suffix. Semver
+     isn't bureaucracy here: the exported surface (<code>New</code>,
+     <code>Set</code>/<code>Get</code>, <code>Option</code>s, sentinel errors) is a
+     promise someone downstream compiles against. The CI workflow encodes the repo's
+     unusual contract: root stub tests are supposed to <em>fail</em>, so the job
+     asserts failure explicitly, then runs the reference solution three times under the
+     race detector — repetition matters more than raw speed for sampling racy
+     interleavings, and the whole matrix finishes in ~20 seconds, cheap enough to gate
+     every push.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Bounded polling, never sleeps</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">eventually</span>(t *testing.T, d time.Duration, what <span class="typ">string</span>, cond <span class="fn">func</span>() bool) {
+    deadline := time.<span class="fn">Now</span>().<span class="fn">Add</span>(d)
+    <span class="kw">for</span> time.Now().Before(deadline) {
+        <span class="kw">if</span> cond() { <span class="kw">return</span> }
+        time.<span class="fn">Sleep</span>(testPollGap)
+    }
+    t.<span class="fn">Fatalf</span>(<span class="str">"timed out after %v waiting for: %s"</span>, d, what)
+}</code></pre>
+  <p>Every asynchronous assertion goes through <code>eventually</code>: poll a condition
+     every 5ms until it holds or a 5-second deadline expires. No fixed
+     <code>time.Sleep(500*time.Millisecond)</code> anywhere — sleeps are simultaneously
+     too slow (when the system is fast) and too fast (when CI runners throttle), and
+     they convert timing luck into pass/fail. Polling converts the question from "did it
+     happen by now?" to "does it happen within budget?", which is the only question a
+     distributed test can legitimately ask. Failure messages name what was awaited
+     (<code>"majority side elected replacement leader"</code>), so a red CI log reads
+     like a diagnosis.</p>
+
+  <h3>The fault harness — scenarios as policy mutations</h3>
+  <pre><code>nodes, _, faults := <span class="fn">newCluster</span>(t, []<span class="typ">string</span>{<span class="str">"n0"</span>, <span class="str">"n1"</span>, <span class="str">"n2"</span>}, <span class="kw">nil</span>)
+faults[id].<span class="fn">Mutate</span>(<span class="kw">func</span>(p *<span class="typ">Policy</span>) {
+    p.DropProb = <span class="num">0.35</span>
+    p.Reorder = <span class="kw">true</span>
+    p.Rand = rand.<span class="fn">New</span>(rand.NewSource(int64(<span class="num">42</span> + i)))
+})</code></pre>
+  <p><code>newCluster</code> wires N nodes over one Hub, wrapping each transport in an
+     individually addressable <code>FaultTransport</code> and registering cleanup. Tests
+     then sculpt networks: <code>DropAll</code> isolates a leader (split-brain probe),
+     blackholes a follower (catch-up probe), or combines <code>DropProb</code> +
+     <code>Reorder</code> with per-link seeded streams (chaos probe). Determinism comes
+     from those seeds — link <code>i</code> drops exactly the same messages on every
+     run — while the assertion stays absolute: after 8 sequential Sets under 35% drop
+     and pair-swapped delivery, all three replicas' snapshots must equal the expected
+     map <em>exactly</em>. Exact-equality convergence is the strongest available claim:
+     missing entries, reordered applications, or phantom values all break it. Replay
+     tolerance gets its own coverage implicitly (duplicate deliveries are idempotent
+     via the term-match <code>continue</code>) and explicitly via forged-message tests
+     that triple-deliver and re-send traffic the cluster already processed.</p>
+
+  <h3>Safety proofs disguised as tests</h3>
+  <p>The sharpest cases aren't happy paths but forgery. <code>TestDuplicateVotesRejectedInSameTerm</code>
+     invents a "ghost" node — a Hub inbox with no Node attached — and sends
+     <code>MsgRequestVote</code> claiming a 10,000-entry log at a maximally recent term:
+     the perfect candidate by the election restriction, and therefore the perfect probe
+     of one-vote-per-term. The assertion is quantitative (zero grants, exactly
+     <code>len(nodes)-1</code> denials), so partial compliance fails loudly.
+     <code>TestPartitionedMinorityUnavailableNoSplitBrain</code> walks the full lifecycle
+     — isolate leader, verify majority promotes <em>at a strictly higher term</em>,
+     verify the isolated leader refuses both writes and reads with
+     <code>ErrNoQuorum</code>, heal, verify step-down, catch-up, and restoration of
+     exactly one leader — the complete safety argument for the hardest property in the
+     project, executable in milliseconds. And the fleet-review regressions
+     (<code>TestDropProbWithoutRandDoesNotKillProcess</code>,
+     <code>TestLeaderStepsDownOnHigherTermAppendResp</code>,
+     <code>TestWithTimingNormalizesInvertedElectionBounds</code>,
+     <code>TestFullRequestChannelReturnsErrBusy</code>) prove that adversarial findings
+     became permanent specification rather than fixed-and-forgotten bugs.</p>
+
+  <div class="callout">
+    <p><strong>Honesty note — the reorder policy:</strong> pair-swap reordering strands
+       an odd trailing message until its partner arrives or <code>Flush()</code> is
+       called. That's a harness liveness quirk, not a Raft defect — heartbeats pair up
+       almost immediately, and Raft tolerates arbitrary swaps anyway. Similarly, full
+       Hub/FaultTransport buffers drop silently rather than blocking senders; at
+       teaching scale, retries recover via heartbeat ticks. Both behaviors are documented
+       in code, not hidden.</p>
+  </div>
+
+  <div class="callout">
+    <p><strong>Honesty note — the error taxonomy:</strong> <code>ErrBusy</code> and
+       <code>ErrNoQuorum</code> are deliberately distinct and separately tested. A full
+       request queue is <em>this node's</em> backpressure (reroute or back off briefly);
+       an RPC-timeout expiry is <em>the cluster's</em> inability to commit (wait for
+       healing). Tests exercise both paths mechanically — stuffing
+       <code>reqCh</code> to capacity for the former, a hard partition for the latter —
+       so the distinction is contractual, not aspirational.</p>
+  </div>
+
+  <h3>Discipline: race × count × clock</h3>
+  <p>The suite's final gate is mechanical: <code>go test -race -count=3
+     ./solution/...</code> passes in roughly 20 seconds (fresh-cache single runs land
+     near 6–7s; <code>-count=3</code> triples the interleavings the race detector
+     samples). <code>gofmt</code> and <code>go vet</code> are clean, and the CI job
+     re-runs the identical commands on every push touching the project. Bounded polling
+     keeps total wall time dominated by real work rather than padded waits — the same
+     reason the fault harness beats process-killing integration tests: faster feedback,
+     tighter scenarios, reproducible failures.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>Raft is the most-deployed consensus protocol on earth, and Go is arguably its
+       most popular host language:</p>
+    <ul>
+      <li><strong>etcd</strong> — Kubernetes' backing store, built on Raft via the
+          <code>go.etcd.io/raft</code> library. That library is the industrial descendant
+          of exactly what you built: it deliberately omits transport, storage, and
+          networking, exposing a <code>Ready</code>-struct state machine — the
+          <code>Transport</code> interface idea, taken to its logical extreme so embedders
+          bring their own I/O.</li>
+      <li><strong>HashiCorp Consul</strong> — service discovery and KV over Raft, using
+          <code>hashicorp/raft</code>, the batteries-included sibling: TCP transports,
+          snapshot stores, and boltdb logs wired for you. Same algorithm, opposite point
+          on the packaging spectrum — comparing the two libraries is a masterclass in API
+          tradeoffs.</li>
+      <li><strong>CockroachDB</strong> — a distributed SQL database where every range of
+          data is a Raft group, implemented in Go on top of a forked etcd/raft. Your
+          per-range replication model — small consensus groups coordinating through a
+          layer above — is the architecture at scale.</li>
+      <li><strong>TiKV</strong> — the Rust/C++ counterpoint: the storage engine behind
+          TiDB runs Multi-Raft with the protocol implemented in Rust, proof that the
+          paper's ideas — and the figure-8 commit subtlety you handled in
+          <code>advanceCommit</code> — transcend any one language.</li>
+    </ul>
+  </div>
+
+  <h3>Why hand-rolled consensus remains a rite of passage</h3>
+  <ol>
+    <li><strong>Every distributed database is Raft-shaped underneath.</strong> Group
+        membership, WALs, quorum reads, leader leasing — the vocabulary repeats across
+        etcd, CockroachDB, MongoDB, Kafka's KRaft mode. Having implemented the core,
+        those systems' design docs stop being folklore and start being readable
+        engineering.</li>
+    <li><strong>The actor/event-loop pattern is Go's native idiom for protocol state
+        machines.</strong> TLS stacks, SSH servers, container runtimes, and the Go
+        runtime's own netpoller all reduce to "one owner goroutine, events over
+        channels." raftling's <code>replica</code> loop is the smallest complete
+        specimen of that shape you'll find with real correctness stakes.</li>
+    <li><strong>Fault-injection harnesses are how serious distributed teams test.</strong>
+        Jepsen made its name by doing to databases what
+        <code>FaultTransport.Mutate</code> does to raftling — injecting partitions,
+        reordering, and duplication while checking invariants. The gap between "tested"
+        and "tested under adversarial scheduling" is precisely the gap between demo and
+        production, and this project installs the habit early.</li>
+  </ol>
+  <p>The through-line: channels + an interface + the Raft paper is not a toy
+     combination — stripped of persistence and membership, it is the exact skeleton
+     running inside the infrastructure that runs Kubernetes, Consul, and CockroachDB,
+     exercised here in ~700 lines with every safety rule pinned by a regression test
+     the adversarial fleet helped write.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="14-fastthumb.html">&larr; Previous: fastthumb</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 15 of 16</span>
+  <a class="btn" href="16-gopherpilot.html">Next: gopherpilot &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>

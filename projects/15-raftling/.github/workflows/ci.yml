@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    paths:
+      - "projects/15-raftling/**"
+  pull_request:
+    paths:
+      - "projects/15-raftling/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/15-raftling
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: vet
+        run: go vet ./...
+      - name: test (stubs must fail)
+        run: go test ./... || code=$?; if [ "${code:-0}" -eq 0 ]; then echo "root tests unexpectedly pass"; exit 1; fi
+      - name: solution tests with race detector
+        run: go test -race -count=3 ./solution/...
