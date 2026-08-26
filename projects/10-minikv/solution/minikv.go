@@ -136,6 +136,16 @@ func NewEngine(cfg Config) (*Engine, error) {
 			f.Close()
 			return nil, err
 		}
+		// Replay can resurrect LRU-evicted keys (eviction deletes in
+		// memory only; no DEL is logged), pushing memUsed above
+		// MaxMemory. Eviction normally runs inside setLocked, so
+		// without this pass the cap would be silently violated until
+		// the next write. Re-enforce it once, now. Note the eviction
+		// itself is still not logged: every future open re-runs this
+		// pass, so the invariant holds across restarts.
+		e.mu.Lock()
+		e.evictIfNeededLocked()
+		e.mu.Unlock()
 	}
 	go e.sweepLoop()
 	return e, nil
@@ -493,8 +503,12 @@ func nextRecord(r *bufio.Reader) (payload []byte, torn bool, err error) {
 	}
 	payload = make([]byte, n)
 	if _, err := io.ReadFull(r, payload); err != nil {
-		if err == io.ErrUnexpectedEOF {
-			return nil, true, nil // payload cut short: classic torn write
+		// ErrUnexpectedEOF = payload cut mid-write. Bare io.EOF here
+		// means zero payload bytes arrived: the file was cut exactly
+		// between the length header and the first payload byte. Both
+		// are incomplete final records — a torn tail, not corruption.
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return nil, true, nil
 		}
 		return nil, false, err
 	}

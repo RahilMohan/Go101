@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -391,12 +392,17 @@ func TestTornTailTruncations(t *testing.T) {
 		t.Fatalf("read raw WAL: %v", err)
 	}
 
-	// Truncate at every record boundary and at boundary-1 (mid-header).
+	// Truncate at every record boundary, at boundary-1 (mid-header),
+	// and at boundary+4 (complete length header, zero payload bytes —
+	// the H1 class where ReadFull returns bare io.EOF).
 	points := map[int64]bool{}
 	for _, p := range bounds {
 		points[p] = true
 		if p > 0 {
 			points[p-1] = true
+		}
+		if p+4 <= int64(len(raw)) {
+			points[p+4] = true
 		}
 	}
 	for p := range points {
@@ -410,7 +416,6 @@ func TestTornTailTruncations(t *testing.T) {
 			if err != nil {
 				t.Fatalf("replay truncated WAL at %d: %v", p, err)
 			}
-			defer e.Close()
 			var wantKeys []string
 			wantVals := map[string]string{}
 			for j, o := range buildOps {
@@ -428,8 +433,91 @@ func TestTornTailTruncations(t *testing.T) {
 					t.Fatalf("Get(%q) = (%q, %v), want %q", k, v, ok, wv)
 				}
 			}
+
+			// Recovery must leave the WAL writable and reopenable:
+			// append one op, close, reopen, verify full state.
+			mustApply(t, e, op{"SET", []string{"post", fmt.Sprintf("at-%d", p)}})
+			if err := e.Close(); err != nil {
+				t.Fatalf("close after truncation at %d: %v", p, err)
+			}
+			e2, err := NewEngine(Config{WALPath: tp})
+			if err != nil {
+				t.Fatalf("reopen WAL written after truncation at %d: %v", p, err)
+			}
+			defer e2.Close()
+			wantVals["post"] = fmt.Sprintf("at-%d", p)
+			wantKeys = append(wantKeys, "post")
+			sort.Strings(wantKeys)
+			if gotKeys := e2.Keys(); !equalStrings(gotKeys, wantKeys) {
+				t.Fatalf("keys after append+reopen (cut %d):\n want %v\n got  %v", p, wantKeys, gotKeys)
+			}
+			for k, wv := range wantVals {
+				if v, ok := e2.Get(k); !ok || v != wv {
+					t.Fatalf("after append+reopen (cut %d): Get(%q) = (%q, %v), want %q", p, k, v, ok, wv)
+				}
+			}
 		})
 	}
+}
+
+// TestReplayReenforcesMemoryCap is the M1 regression: LRU-evicted keys
+// must not resurrect on WAL replay, and the memory cap must hold
+// immediately after open (not only from the next write on).
+func TestReplayReenforcesMemoryCap(t *testing.T) {
+	dir := t.TempDir()
+	memPerEntry := entryOverhead + 4 // key/value each len 2
+	path := filepath.Join(dir, "wal.bin")
+
+	a, err := NewEngine(Config{
+		WALPath:        path,
+		MaxMemory:      memPerEntry * 2,
+		EvictionPolicy: "lru",
+	})
+	if err != nil {
+		t.Fatalf("NewEngine A: %v", err)
+	}
+	mustApply(t, a, op{"SET", []string{"aa", "va"}})
+	mustApply(t, a, op{"SET", []string{"bb", "vb"}})
+	mustApply(t, a, op{"SET", []string{"cc", "vc"}}) // exceeds cap → evict oldest "aa"
+	a.kill()                                         // crash without clean shutdown
+
+	b, err := NewEngine(Config{
+		WALPath:        filepath.Join(mustCopy(t, dir, path), "copy.bin"),
+		MaxMemory:      memPerEntry * 2,
+		EvictionPolicy: "lru",
+	})
+	if err != nil {
+		t.Fatalf("reopen after crash: %v", err)
+	}
+	defer b.Close()
+	if _, ok := b.Get("aa"); ok {
+		t.Fatal("LRU-evicted key resurrected on replay")
+	}
+	gotKeys := b.Keys()
+	if !equalStrings(gotKeys, []string{"bb", "cc"}) {
+		t.Fatalf("keys after reopen = %v, want [bb cc]", gotKeys)
+	}
+	// The cap must be enforced now, not just on the next SET.
+	b.mu.Lock()
+	mem := b.memUsed
+	b.mu.Unlock()
+	if mem > memPerEntry*2 {
+		t.Fatalf("memUsed %d above MaxMemory %d right after replay", mem, memPerEntry*2)
+	}
+}
+
+// mustCopy copies the WAL at src into a new file in dir and returns dir.
+func mustCopy(t *testing.T, dir, src string) string {
+	t.Helper()
+	raw, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("read WAL for copy: %v", err)
+	}
+	dst := filepath.Join(dir, "copy.bin")
+	if err := os.WriteFile(dst, raw, 0o644); err != nil {
+		t.Fatalf("write WAL copy: %v", err)
+	}
+	return dir
 }
 
 func TestMidFileCorruptionIsError(t *testing.T) {
