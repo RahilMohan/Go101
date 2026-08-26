@@ -316,9 +316,9 @@
     <li><strong>Protocol design under truncation.</strong> A length-prefixed stream must be
         parsable <em>prefix-wise</em>: every record boundary is discoverable from bytes alone,
         so a log cut at an arbitrary point decomposes cleanly into "complete prefix" plus
-        "suspect tail." Designing framings with that property — and testing them at
-        <em>every</em> truncation point — is the transferable skill behind every log-structured
-        system.</li>
+        "suspect tail." Designing framings with that property — and testing them at every
+        record boundary plus the adjacent partial-header and partial-payload cuts — is the
+        transferable skill behind every log-structured system.</li>
   </ol>
 </section>
 
@@ -527,8 +527,27 @@
      memory budget is exceeded — O(n) per eviction, but amortized across writes and perfectly
      correct ordering. This is precisely Redis's own <code>volatile-lru</code>/
      <code>allkeys-lru</code> approach: sample-and-evict approximately, spend the saved
-     complexity elsewhere. One documented limitation: entries restored by WAL replay all get
-     <code>lastAccess = open time</code>, so their pre-crash recency ordering is lost —
+     complexity elsewhere.</p>
+  <pre><code><span class="kw">if</span> err := e.<span class="fn">replay</span>(); err != <span class="kw">nil</span> {
+    f.<span class="fn">Close</span>()
+    <span class="kw">return</span> <span class="kw">nil</span>, err
+}
+<span class="com">// Replay can resurrect LRU-evicted keys (eviction deletes in memory only;</span>
+<span class="com">// no DEL is logged), pushing memUsed above MaxMemory. Eviction normally</span>
+<span class="com">// runs inside setLocked, so without this pass the cap would be silently</span>
+<span class="com">// violated until the next write. Re-enforce it once, now.</span>
+e.mu.<span class="fn">Lock</span>()
+e.<span class="fn">evictIfNeededLocked</span>()
+e.mu.<span class="fn">Unlock</span>()</code></pre>
+  <p>The excerpt exposes a subtlety worth pausing on: eviction deletes in memory only — no
+     <code>DEL</code> is logged, so a WAL replay faithfully resurrects keys that had been
+     evicted before the crash, and replay finishes with <code>memUsed</code> above
+     <code>MaxMemory</code>. Because eviction normally fires inside <code>setLocked</code>,
+     that violation would silently persist until the first post-restart write.
+     <code>NewEngine</code> therefore re-enforces the cap once, immediately after replay, on
+     every open — the invariant holds across restarts even though evictions themselves are
+     never journaled. One documented limitation remains: entries restored by WAL replay all
+     get <code>lastAccess = open time</code>, so their pre-crash recency ordering is lost —
      acceptable at teaching scope, worth knowing about.</p>
 
   <h3>D7: Connection registration and WaitGroup counting under one lock</h3>
@@ -576,7 +595,9 @@ s.mu.Unlock()
   <p>Consider the crash: <code>wal.append</code> wrote the 4-byte length header and half the
      payload when the power died. On reopen, <code>nextRecord</code> reads a valid header
      announcing 40 bytes, then <code>io.ReadFull</code> returns <code>ErrUnexpectedEOF</code>
-     after 22. Three facts follow. First, this is <em>not necessarily corruption</em> — it's
+     after 22. (The sibling cut — header complete, <em>zero</em> payload bytes present — makes
+     <code>ReadFull</code> return bare <code>io.EOF</code>, which is why both are explicitly
+     classified as torn.) Three facts follow. First, this is <em>not necessarily corruption</em> — it's
      the signature of "the last write never finished," an expected state in any append-only
      system. Second, it's only detectable <em>at the tail</em>: the reader knows a record is
      incomplete only because the file ended underneath it, so "torn tail" and "file was cut
@@ -684,24 +705,31 @@ r := bufio.<span class="fn">NewReader</span>(e.wal.f)   <span class="com">// rep
      immediately. Replay identity is the strongest single assertion a WAL can face: it
      subsumes framing, ordering, expiry encoding, and error handling in one comparison.</p>
 
-  <h3>The per-byte torn-tail sweep</h3>
-  <pre><code><span class="com">// Truncate at every record boundary AND at boundary-1 (mid-header).</span>
+  <h3>Torn-tail testing by cut class</h3>
+  <pre><code><span class="com">// Truncate at every record boundary, at boundary-1 (mid-header), and at</span>
+<span class="com">// boundary+4 (complete length header, zero payload bytes).</span>
 points := map[<span class="typ">int64</span>]<span class="typ">bool</span>{}
 <span class="kw">for</span> _, p := <span class="kw">range</span> bounds {
     points[p] = <span class="kw">true</span>
     <span class="kw">if</span> p &gt; <span class="num">0</span> { points[p-<span class="num">1</span>] = <span class="kw">true</span> }   <span class="com">// cut inside the length prefix</span>
+    <span class="kw">if</span> p+<span class="num">4</span> &lt;= <span class="typ">int64</span>(len(raw)) {
+        points[p+<span class="num">4</span>] = <span class="kw">true</span>            <span class="com">// header written, payload absent</span>
+    }
 }
 <span class="kw">for</span> p := <span class="kw">range</span> points {
     t.<span class="fn">Run</span>(fmt.<span class="fn">Sprintf</span>(<span class="str">"trunc-%d"</span>, p), ...)
 }</code></pre>
-  <p>Most crash tests sample one unlucky truncation point and hope. This suite enumerates
-     <em>every</em> possible cut: while building the log it records the exact file size after
-     each apply (the record boundaries), then generates a subtest per boundary <em>plus</em>
-     per boundary−1, which slices through a length prefix — the sneakiest case, where a
-     half-header must be recognized as torn rather than parsed as an enormous bogus length.
-     Each subtest asserts the complete-prefix property independently: the surviving keys are
-     precisely those whose records fit entirely within the cut. Exhaustive coverage converts
-     "we tested crashing" into "we proved recovery for every reachable crash point."</p>
+  <p>Most crash tests sample one unlucky truncation point and hope. This suite systematically
+     covers the three cut classes a length-prefixed framing can suffer. While building the log
+     it records the exact file size after each apply (the record boundaries), then generates a
+     subtest per boundary, per boundary−1 — which slices through a length prefix, where a
+     half-header must be recognized as torn rather than parsed as an enormous bogus length —
+     and per boundary+4: the header fully written but zero payload bytes present, where
+     <code>ReadFull</code> returns bare <code>io.EOF</code>, which naive code misreads as clean
+     end-of-file instead of a torn tail (this class began life as the H1 bug report and is now
+     pinned by its own regression cuts). Each subtest asserts the complete-prefix property
+     independently: the surviving keys are precisely those whose records fit entirely within
+     the cut.</p>
 
   <h3>Crash simulation without a crash</h3>
   <p>You can't <code>kill -9</code> your own unit test usefully, so the engine ships a
