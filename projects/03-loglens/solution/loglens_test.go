@@ -50,6 +50,26 @@ func TestAnalyzeSingleLine(t *testing.T) {
 			want:    Stats{Skipped: 1, ByStatus: map[int]int{}, ByPath: map[string]int{}},
 			wantErr: false,
 		},
+		{
+			name:  "junk protocol tail is skipped, path not counted",
+			input: "1.2.3.4 - - [t] \"GET /a b HTTP/1.1\" 200 5\n",
+			want:  Stats{Skipped: 1, ByStatus: map[int]int{}, ByPath: map[string]int{}},
+		},
+		{
+			name:  "status with sign prefix is skipped",
+			input: "1.2.3.4 - - [t] \"GET /a HTTP/1.1\" +200 5\n",
+			want:  Stats{Skipped: 1, ByStatus: map[int]int{}, ByPath: map[string]int{}},
+		},
+		{
+			name:  "status with leading zero padding is skipped",
+			input: "1.2.3.4 - - [t] \"GET /a HTTP/1.1\" 0200 5\n",
+			want:  Stats{Skipped: 1, ByStatus: map[int]int{}, ByPath: map[string]int{}},
+		},
+		{
+			name:  "negative status is skipped",
+			input: "1.2.3.4 - - [t] \"GET /a HTTP/1.1\" -5 5\n",
+			want:  Stats{Skipped: 1, ByStatus: map[int]int{}, ByPath: map[string]int{}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -82,8 +102,8 @@ func TestAnalyzeMixedStreaming(t *testing.T) {
 	b.WriteString(validLine + "\n")
 	b.WriteString("garbage that matches nothing\n")
 	b.WriteString(`10.0.0.9 - bob [x] "POST /api/x HTTP/1.1" 404 10` + "\n")
-	b.WriteString(`10.0.0.2 - - [y] "GET /broken HTTP/1.1" abc 5` + "\n") // malformed status
-	b.WriteString("\n")                                                   // empty line -> skipped
+	b.WriteString(`10.0.0.2 - - [y] "GET /broken HTTP/1.1" 500 abc` + "\n") // malformed bytes
+	b.WriteString("\n")                                                     // empty line -> skipped
 
 	stats, err := Analyze(strings.NewReader(b.String()))
 	if err == nil {
@@ -108,16 +128,16 @@ func TestAnalyzeMixedStreaming(t *testing.T) {
 }
 
 func TestSentinelErrors(t *testing.T) {
+	// Status is regex-validated as exactly 3 digits, so malformed
+	// fields surface via the bytes field instead.
 	_, err := Analyze(strings.NewReader(
-		"1.2.3.4 - - [t] \"GET /a HTTP/1.1\" notanumber 5\n"))
+		"1.2.3.4 - - [t] \"GET /a HTTP/1.1\" 200 notanumber\n"))
 	if err == nil {
 		t.Fatal("expected malformed-line error")
 	}
 	if !errors.Is(err, ErrMalformed) {
 		t.Errorf("errors.Is(err, ErrMalformed) = false through LineError chain; err = %v", err)
 	}
-	var numErr interface{ Error() string }
-	_ = numErr // strconv failure should also be reachable; primary contract below
 	var le *LineError
 	if !errors.As(err, &le) || le.Unwrap() == nil {
 		t.Fatalf("LineError unwrap chain broken: %v", err)

@@ -21,7 +21,7 @@ var (
 	// analysis; they only increment Stats.Skipped.
 	ErrSkip = errors.New("loglens: line does not match format")
 	// ErrMalformed is the sentinel for lines that have the shape of a
-	// log entry but contain unparseable fields (e.g. non-numeric status).
+	// log entry but contain unparseable fields (e.g. non-numeric bytes).
 	ErrMalformed = errors.New("loglens: malformed line")
 )
 
@@ -33,10 +33,15 @@ const maxLineSize = 1024 * 1024
 //
 //	remote - user [timestamp] "METHOD path PROTO" status bytes
 //
-// Status and bytes stay as raw strings so unparseable fields can be
+// The request-line tail must start with a literal "HTTP/" so junk after
+// the path (e.g. `"GET /a b HTTP/1.1"`) cannot masquerade as a protocol
+// token; such lines are skipped instead of counted. Status must be
+// exactly three digits, so values like "+200", "0200", or "-5" are
+// skipped rather than accepted by strconv and polluting ByStatus.
+// Bytes stay as a raw string so unparseable fields can still be
 // reported as ErrMalformed (with the strconv error wrapped) instead of
 // being silently skipped.
-var lineRe = regexp.MustCompile(`^(\S+) \S+ (\S+) \[([^\]]*)\] "([A-Z]+) (\S+) [^"]*" (\S+) (\S+)$`)
+var lineRe = regexp.MustCompile(`^(\S+) \S+ (\S+) \[([^\]]*)\] "([A-Z]+) (\S+) (?:HTTP/[^"]*)" (\d{3}) (\S+)$`)
 
 // Entry is a parsed common/uncombined log-format line.
 type Entry struct {
@@ -62,17 +67,21 @@ func (e *LineError) Unwrap() error { return e.Err }
 
 // Stats aggregates counts over parsed lines.
 type Stats struct {
-	Total    int            // successfully parsed lines
-	Skipped  int            // non-matching lines (ErrSkip)
-	ByStatus map[int]int    // status code -> count
-	ByPath   map[string]int // raw Path -> count
+	Total    int         // successfully parsed lines
+	Skipped  int         // non-matching lines (ErrSkip)
+	ByStatus map[int]int // status code -> count
+	// ByPath maps raw Path -> count. Documented tradeoff: it grows
+	// unboundedly on high-cardinality input (one entry per unique
+	// path, retained verbatim for the process lifetime); callers
+	// feeding untrusted/high-cardinality streams should bound input.
+	ByPath map[string]int
 }
 
 // Analyze parses r line-by-line using bufio.Scanner with a raised buffer
 // limit (1MB lines). It NEVER loads the whole input into memory.
 //
 // Non-matching lines increment Skipped and do not abort analysis.
-// Malformed matching-shaped lines (e.g. non-numeric status) abort with a
+// Malformed matching-shaped lines (e.g. non-numeric bytes) abort with a
 // *LineError wrapping both ErrMalformed and the strconv failure; the
 // returned partial stats reflect everything parsed before that line.
 func Analyze(r io.Reader) (*Stats, error) {
