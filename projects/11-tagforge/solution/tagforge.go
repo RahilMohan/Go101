@@ -37,6 +37,16 @@
 //     each wrapped with its dotted field path ("Server.Timeout").
 //   - Nested structs recurse with dotted paths; embedded structs are
 //     promoted so their fields validate at top-level paths.
+//   - Struct elements of slices/maps/arrays ARE validated recursively
+//     ("Items[0].Code", "ByID[k].Port"); nil pointer elements skip
+//     silently, like optional fields. Scalar collections stay
+//     length-only.
+//   - Recursive struct types (self- or mutually-referential through any
+//     chain of pointer/nested/collection hops) are rejected at BUILD
+//     time with "recursive type not supported": their validation plans
+//     would never terminate. Cycle detection tracks the current path's
+//     types only — diamond-shaped reuse of one type at several depths
+//     remains legal.
 //   - A nil pointer inside a struct is a violation iff required;
 //     an optional nil pointer skips its remaining checks entirely.
 //   - Unexported fields are ignored silently: reflection cannot set
@@ -222,13 +232,16 @@ func checkApplicable(path string, t reflect.Type, c constraints) error {
 
 // fieldPlan is one field's fully resolved validation work: where to
 // find it (index chain through any promoted embeds), what to check,
-// and where to recurse for nested structs.
+// and where to recurse for nested structs or struct elements of
+// slices/maps/arrays.
 type fieldPlan struct {
-	idx    []int       // index chain from the root struct value
-	path   string      // dotted path used in error messages
-	c      constraints // parsed tag
-	isPtr  bool        // final hop is a pointer
-	nested *structPlan // non-nil when the effective field type is a struct
+	idx         []int       // index chain from the root struct value
+	path        string      // dotted path used in error messages
+	childPrefix string      // path prefix handed to nested plans ("path." / "")
+	c           constraints // parsed tag
+	isPtr       bool        // final hop is a pointer
+	nested      *structPlan // non-nil when the effective field type is a struct
+	elems       *structPlan // non-nil for slice/map/array fields whose elements are structs
 }
 
 // structPlan is the compiled plan for one struct type.
@@ -236,7 +249,24 @@ type structPlan struct {
 	fields []fieldPlan
 }
 
-func buildStructPlan(t reflect.Type, prefix string) (*structPlan, error) {
+// maxDepth bounds validation recursion. Plans are acyclic by
+// construction (recursive types are rejected at build time), so this
+// is defense-in-depth against pathological data shapes, not a
+// correctness requirement.
+const maxDepth = 64
+
+func buildStructPlan(t reflect.Type, prefix string, stack []reflect.Type) (*structPlan, error) {
+	// Cycle detection tracks the CURRENT PATH's types, not global
+	// visited-set: one type may legitimately appear at several depths
+	// via different paths (diamonds), but a type appearing twice on one
+	// path means infinite recursion ahead — reject it at build time.
+	for _, st := range stack {
+		if st == t {
+			return nil, fmt.Errorf("%srecursive type %s not supported", prefix, t)
+		}
+	}
+	stack = append(stack, t)
+
 	sp := &structPlan{}
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -255,11 +285,11 @@ func buildStructPlan(t reflect.Type, prefix string) (*structPlan, error) {
 			// Embedded structs are promoted even when the embedded
 			// type's name is unexported: reading its exported fields
 			// is legal reflection, and their paths belong at this level.
+			sub, err := buildStructPlan(ft, prefix, stack)
+			if err != nil {
+				return nil, err
+			}
 			if !isPtr {
-				sub, err := buildStructPlan(ft, prefix)
-				if err != nil {
-					return nil, err
-				}
 				for j := range sub.fields {
 					promoted := sub.fields[j]
 					promoted.idx = append([]int{i}, promoted.idx...)
@@ -269,11 +299,7 @@ func buildStructPlan(t reflect.Type, prefix string) (*structPlan, error) {
 			}
 			// Embedded pointer-to-struct also promotes; its inner
 			// paths are top-level and nil skips silently.
-			sub, err := buildStructPlan(ft, prefix)
-			if err != nil {
-				return nil, err
-			}
-			sp.fields = append(sp.fields, fieldPlan{idx: []int{i}, isPtr: true, nested: sub})
+			sp.fields = append(sp.fields, fieldPlan{idx: []int{i}, path: "", isPtr: true, nested: sub})
 			continue
 		}
 
@@ -286,11 +312,12 @@ func buildStructPlan(t reflect.Type, prefix string) (*structPlan, error) {
 		if ft.Kind() == reflect.Struct {
 			// Named nested struct: compile its subtree; the wrapper's
 			// own tag may only use required/nonzero.
-			sub, err := buildStructPlan(ft, path+".")
+			sub, err := buildStructPlan(ft, path+".", stack)
 			if err != nil {
 				return nil, err
 			}
 			fp.nested = sub
+			fp.childPrefix = path + "."
 			c, cerr := compileConstraints(path, f.Tag.Get("validate"))
 			if cerr != nil {
 				return nil, cerr
@@ -311,6 +338,25 @@ func buildStructPlan(t reflect.Type, prefix string) (*structPlan, error) {
 			return nil, cerr
 		}
 		fp.c = c
+
+		// Collections of structs get their ELEMENTS validated
+		// recursively (paths like "Items[0].Code"); scalar collections
+		// stay length-only. Nil pointer elements skip silently.
+		switch ft.Kind() {
+		case reflect.Slice, reflect.Array, reflect.Map:
+			et := ft.Elem()
+			if et.Kind() == reflect.Ptr {
+				et = et.Elem()
+			}
+			if et.Kind() == reflect.Struct {
+				ep, eerr := buildStructPlan(et, "", stack)
+				if eerr != nil {
+					return nil, fmt.Errorf("field %s: element type: %w", path, eerr)
+				}
+				fp.elems = ep
+			}
+		}
+
 		sp.fields = append(sp.fields, fp)
 	}
 	return sp, nil
@@ -336,39 +382,95 @@ func walk(sv reflect.Value, idx []int) (fv reflect.Value, ok bool) {
 // run executes sp against sv (a struct value of the planned type),
 // appending violations.
 func (sp *structPlan) run(sv reflect.Value, errs *[]FieldError) {
+	sp.runAt(sv, "", 0, errs)
+}
+
+// runAt is run with a dynamic path prefix (used for collection
+// elements, whose indices/keys only exist at runtime) and a depth
+// guard.
+func (sp *structPlan) runAt(sv reflect.Value, prefix string, depth int, errs *[]FieldError) {
+	if depth > maxDepth {
+		*errs = append(*errs, FieldError{prefix, "nesting too deep"})
+		return
+	}
 	for i := range sp.fields {
 		fp := &sp.fields[i]
 		fv, ok := walk(sv, fp.idx)
 		if !ok {
 			continue // crossed a nil intermediate pointer: nothing to check
 		}
+		// Fast path: at the root (and inside element plans, which are
+		// compiled prefix-free) the build-time paths are already
+		// absolute, so no per-call concatenation is needed. Only
+		// collection elements, whose indices/keys exist only at
+		// runtime, pay for string building.
+		fullPath := fp.path
+		childPrefix := fp.childPrefix
+		if prefix != "" {
+			fullPath = prefix + fp.path
+			if fp.nested != nil && fp.path != "" {
+				childPrefix = fullPath + "."
+			} else {
+				childPrefix = prefix
+			}
+		}
 
 		if fp.nested != nil {
 			if fp.isPtr {
 				if fv.IsNil() {
 					if fp.c.required {
-						*errs = append(*errs, FieldError{fp.path, "must not be nil (required)"})
+						*errs = append(*errs, FieldError{fullPath, "must not be nil (required)"})
 					}
 					continue // optional-nil skips remaining checks
 				}
 				fv = fv.Elem()
 			}
-			checkLeaf(fp.path, fv, fp.c, errs) // required/nonzero on the wrapper itself
-			fp.nested.run(fv, errs)
+			checkLeaf(fullPath, fv, fp.c, errs) // required/nonzero on the wrapper itself
+			fp.nested.runAt(fv, childPrefix, depth+1, errs)
 			continue
 		}
 
 		if fp.isPtr {
 			if fv.IsNil() {
 				if fp.c.required {
-					*errs = append(*errs, FieldError{fp.path, "must not be nil (required)"})
+					*errs = append(*errs, FieldError{fullPath, "must not be nil (required)"})
 				}
 				continue // optional-nil skips remaining checks
 			}
 			fv = fv.Elem()
 		}
-		checkLeaf(fp.path, fv, fp.c, errs)
+		checkLeaf(fullPath, fv, fp.c, errs)
+
+		if fp.elems != nil {
+			runElems(fp.elems, fullPath, fv, depth+1, errs)
+		}
 	}
+}
+
+// runElems validates struct elements of a slice/array/map field,
+// building indexed element paths like "Items[0]" or "ByID[k]".
+func runElems(ep *structPlan, fieldPath string, fv reflect.Value, depth int, errs *[]FieldError) {
+	switch fv.Kind() {
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < fv.Len(); i++ {
+			runElem(ep, fv.Index(i), fmt.Sprintf("%s[%d]", fieldPath, i), depth, errs)
+		}
+	case reflect.Map:
+		for iter := fv.MapRange(); iter.Next(); {
+			runElem(ep, iter.Value(),
+				fmt.Sprintf("%s[%v]", fieldPath, iter.Key().Interface()), depth, errs)
+		}
+	}
+}
+
+func runElem(ep *structPlan, ev reflect.Value, elemPath string, depth int, errs *[]FieldError) {
+	if ev.Kind() == reflect.Ptr {
+		if ev.IsNil() {
+			return // nil pointer element: skipped silently, like optional fields
+		}
+		ev = ev.Elem()
+	}
+	ep.runAt(ev, elemPath+".", depth, errs)
 }
 
 func numValue(fv reflect.Value) float64 {
@@ -480,7 +582,7 @@ func Validate(v any) error {
 	if !ok {
 		return fmt.Errorf("tagforge: expected struct or non-nil pointer to struct, got %T", v)
 	}
-	sp, err := buildStructPlan(rv.Type(), "")
+	sp, err := buildStructPlan(rv.Type(), "", nil)
 	if err != nil {
 		return err
 	}
@@ -514,7 +616,7 @@ func BuildSchema(t reflect.Type) (*Schema, error) {
 	if st.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("tagforge: BuildSchema: expected struct type, got %s", t)
 	}
-	plan, err := buildStructPlan(st, "")
+	plan, err := buildStructPlan(st, "", nil)
 	if err != nil {
 		return nil, err
 	}

@@ -444,7 +444,141 @@ func TestUnexportedFieldsIgnored(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 9. FuzzTagGrammar: arbitrary tag strings never panic
+// 9. Recursive types rejected at build time, never hanging
+// ---------------------------------------------------------------------------
+
+type listNode struct {
+	Val  int `validate:"min=0"`
+	Next *listNode
+}
+
+type cycA struct {
+	B    *cycB
+	Name string `validate:"required"`
+}
+
+type cycB struct {
+	A *cycA
+}
+
+// Diamond reuse of one type at different depths stays legal.
+type sharedLeaf struct {
+	N int `validate:"min=1"`
+}
+type branchOne struct {
+	L sharedLeaf
+}
+type diamondRoot struct {
+	L sharedLeaf
+	R branchOne
+}
+
+func TestRecursiveTypesRejected(t *testing.T) {
+	// Self-referential pointer struct.
+	if _, err := BuildSchema(reflect.TypeOf(listNode{})); err == nil {
+		t.Fatal("BuildSchema must reject self-referential type")
+	} else if !strings.Contains(err.Error(), "recursive type") {
+		t.Errorf("error should say recursive type not supported, got: %v", err)
+	}
+
+	// Mutually-referential pair.
+	if _, err := BuildSchema(reflect.TypeOf(cycA{})); err == nil {
+		t.Fatal("BuildSchema must reject mutually-referential types")
+	} else if !strings.Contains(err.Error(), "recursive type") {
+		t.Errorf("error should say recursive type not supported, got: %v", err)
+	}
+
+	// The naive path must fail cleanly too — a hang here is the bug.
+	if err := Validate(listNode{}); err == nil || !strings.Contains(err.Error(), "recursive type") {
+		t.Fatalf("Validate must fail closed on recursive type, got: %v", err)
+	}
+	if err := Validate(cycA{}); err == nil || !strings.Contains(err.Error(), "recursive type") {
+		t.Fatalf("Validate must fail closed on mutual recursion, got: %v", err)
+	}
+
+	// Path-scoped tracking: same type at multiple depths via different
+	// paths (diamond) is NOT a cycle and must build + validate fine.
+	sc, err := BuildSchema(reflect.TypeOf(diamondRoot{}))
+	if err != nil {
+		t.Fatalf("diamond-shaped type reuse should be legal: %v", err)
+	}
+	if err := sc.Validate(diamondRoot{L: sharedLeaf{N: 1}, R: branchOne{L: sharedLeaf{N: 2}}}); err != nil {
+		t.Errorf("valid diamond value rejected: %v", err)
+	}
+	err = sc.Validate(diamondRoot{R: branchOne{L: sharedLeaf{N: 0}}})
+	if err == nil || !strings.Contains(err.Error(), "R.L.N") {
+		t.Errorf("deep diamond violation should carry path R.L.N, got: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 10. Struct elements inside slices/maps are validated recursively
+// ---------------------------------------------------------------------------
+
+type collItem struct {
+	Code string `validate:"required,email"`
+}
+
+type collCfg struct {
+	Items []collItem `validate:"min=1"`
+	ByID  map[string]collItem
+	Ptrs  []*collItem
+}
+
+func TestCollectionElementsValidated(t *testing.T) {
+	good := collCfg{
+		Items: []collItem{{Code: "a@b.com"}, {Code: "c@d.com"}},
+		ByID:  map[string]collItem{"x": {Code: "e@f.com"}},
+		Ptrs:  []*collItem{{Code: "g@h.com"}, nil}, // nil element skipped silently
+	}
+	if err := Validate(good); err != nil {
+		t.Fatalf("valid collection config rejected: %v", err)
+	}
+	sc, err := BuildSchema(reflect.TypeOf(collCfg{}))
+	if err != nil {
+		t.Fatalf("BuildSchema: %v", err)
+	}
+	if err := sc.Validate(good); err != nil {
+		t.Fatalf("schema rejected valid collection config: %v", err)
+	}
+
+	bad := collCfg{
+		Items: []collItem{{Code: "ok@x.com"}, {Code: "broken-email"}},
+		ByID:  map[string]collItem{"k": {Code: ""}},
+		Ptrs:  []*collItem{{Code: ""}},
+	}
+	err = Validate(bad)
+	if err == nil {
+		t.Fatal("element violations must not pass silently")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"Items[1].Code",
+		"ByID[k].Code",
+		"Ptrs[0].Code",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error missing %q:\n%s", want, msg)
+		}
+	}
+
+	// Same behavior through the compiled schema.
+	err = sc.Validate(bad)
+	if err == nil || !strings.Contains(err.Error(), "Items[1].Code") {
+		t.Errorf("schema must validate collection elements identically, got: %v", err)
+	}
+
+	// Scalar collections remain length-only (no per-element checks).
+	type scalarColl struct {
+		Tags []string `validate:"min=1"`
+	}
+	if err := Validate(scalarColl{Tags: []string{"", ""}}); err != nil {
+		t.Errorf("scalar collections stay length-only, got: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FuzzTagGrammar: arbitrary tag strings never panic
 // ---------------------------------------------------------------------------
 
 func FuzzTagGrammar(f *testing.F) {
