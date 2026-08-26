@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 11 — tagforge</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>tagforge</h1>
+  <p class="subtitle">Go101 · Project 11 — struct-tag validation via reflection</p>
+  <div class="badge-row">
+    <span class="badge tier">Advanced Tier</span>
+    <span class="badge">reflect</span>
+    <span class="badge">strconv</span>
+    <span class="badge">struct tags</span>
+    <span class="badge">Precompiled schema</span>
+    <span class="badge">Fail-closed design</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: reflect + strconv, nothing else</h3>
+  <p>tagforge is built from two load-bearing stdlib packages — <code>reflect</code> and
+     <code>strconv</code> — with <code>strings</code>, <code>slices</code>, <code>fmt</code>,
+     <code>errors</code>, and <code>math</code> in bit parts. No validator library, no code
+     generator, no <code>go.sum</code>. Every prior project avoided dependencies because they
+     weren't needed; this one avoids them where most Go code <em>reaches for them by reflex</em>,
+     which makes it the more interesting kind of discipline.</p>
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in tagforge</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>reflect</code></td><td><code>Type</code>/<code>Value</code> separation, <code>Kind</code> switches over field types, <code>Field(i)</code>/<code>PkgPath</code>/<code>Tag.Get</code> for struct introspection, <code>IsZero</code>/<code>Len</code>/<code>Int</code>/<code>Uint</code>/<code>Float</code>/<code>String</code> for typed reads after validity checks</td><td>Reflection is a strict protocol, not magic: check validity before every <code>Elem()</code>, respect export rules via <code>PkgPath</code>, and treat <code>Kind</code> — not concrete type — as your dispatch axis</td></tr>
+      <tr><td><code>strconv</code></td><td><code>ParseFloat</code> turns <code>min=1.5e-3</code> arguments into numbers — wrapped in a guard that rejects everything ParseFloat would too generously accept (<code>NaN</code>, <code>Inf</code>, hex floats, underscores)</td><td>Parsing libraries are usually more permissive than your grammar; wrapping them with a whitelist is how you get strictness without writing a parser</td></tr>
+      <tr><td><code>strings</code> / <code>slices</code></td><td>Tag tokenization (<code>Cut</code>, <code>Fields</code>, <code>Split</code>) and membership checks (<code>slices.Contains</code>) for <code>oneof</code></td><td>The whole tag grammar is ~20 lines of standard library string work — a reminder that "parsing" is not a reason to import anything</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>Validator libraries (<code>github.com/go-playground/validator</code>)</strong> —
+        the obvious production answer, and genuinely excellent at it. But it hides exactly the
+        mechanics this project exists to teach: how a <code>validate:"min=3,email"</code> string
+        becomes checks, how reflection walks fields, why errors carry paths. After building
+        tagforge you can read validator's docs and <em>know what its single-universe option flags
+        are trading away</em>. Using it here would turn the lesson into configuration.</li>
+    <li><strong>Code generation</strong> — tools that emit a hand-written <code>Validate()</code>
+        method per type are a legitimate different tradeoff: zero runtime reflection, compile-time
+        errors, at the price of a build step and generated files in review. It's worth naming
+        precisely because it solves the <em>cost</em> problem this project measures, while giving
+        up the flexibility problem reflection exists for — dynamic types discovered at runtime
+        (like tagforge's own <code>reflect.StructOf</code> test helpers) simply have no codegen
+        story.</li>
+    <li><strong>Hand-written <code>Validate() error</code> methods per type</strong> — no
+        reflection at all, but no shared guarantees either: every type reinvents required/min/max,
+        forgets aggregation, drifts from its siblings. Tag-driven validation buys uniformity;
+        this project builds that uniformity once, visibly.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>reflect.Type / reflect.Value discipline.</strong> Types describe structure (walk
+        it once); values hold data (walk it per call) — internalizing that split is what separates
+        reflective code that works from reflective code that panics. Validity checks before
+        <code>Elem()</code>, <code>Kind</code> dispatch instead of type assertions, and honest
+        handling of unexported fields become muscle memory.</li>
+    <li><strong>Tag grammar parsing from first principles.</strong> A struct tag is just a raw
+        string convention — <code>f.Tag.Get("validate")</code> hands you bytes and wishes you
+        luck. Designing a small grammar (names, arguments, separators), failing closed on
+        anything you can't fully understand, and fuzzing the parser until it can't be crashed is
+        a complete miniature of real-world input handling.</li>
+    <li><strong>Precompilation as the escape hatch from reflection's cost.</strong> Reflection
+        re-does structural work every call; a compiled schema does it once. The measured gap —
+        roughly <strong>15–25×</strong> depending on machine and config shape (on one M1 Pro
+        laptop: ~3,300 ns/op naive vs ~170 ns/op compiled on a six-field nested config) — is not
+        an implementation detail. It is <em>the</em> argument behind every schema-building API
+        you'll ever meet, from JSON decoders to protobuf, measured here with your own
+        benchmarks.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>tagforge_test.go</code> — the executable specification. If
+     your implementation passes these tests, it satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Six constraints, correct across their type matrix.</strong>
+        <code>required</code> (non-zero demanded), <code>nonzero</code>,
+        <code>min=N</code>/<code>max=N</code> (numeric comparison <em>or</em> length for
+        string/map/slice/array), <code>email</code> (exactly one <code>@</code>, non-empty local
+        and domain parts), <code>oneof=a|b|c</code> (string membership). Each constraint passes
+        and fails on the right side of each applicable type — ints, uints, floats, strings,
+        slices, maps, bools.</li>
+    <li><strong>R2 — All violations aggregate into one error.</strong> A config with five broken
+        fields returns a single <code>ValidationError</code> naming every one, each wrapped with
+        its dotted field path (<code>"Server.Timeout"</code>) — never fail-fast.</li>
+    <li><strong>R3 — Nested and embedded structs resolve to dotted paths.</strong> Named nested
+        structs recurse (<code>DB.Port</code>); embedded structs promote so their fields validate
+        at top-level paths (<code>ID</code>, never <code>embBase.ID</code>) — including embeds
+        whose type name is unexported.</li>
+    <li><strong>R4 — Pointers follow three rules.</strong> A nil pointer violates iff
+        <code>required</code>; an optional nil pointer skips its remaining checks entirely
+        (no spurious min/max failures on nothing); a non-nil pointer's pointee is checked after
+        dereference.</li>
+    <li><strong>R5 — Fail closed on bad tags.</strong> Unknown constraint names, missing or
+        unexpected arguments, malformed numbers, and constraints that cannot apply to the field's
+        type (including co-resident with an applicable one, e.g. <code>min=1,email</code> on an
+        int) must error — in <code>Validate</code> and in <code>BuildSchema</code> alike — with
+        messages naming the field and the offending token.</li>
+    <li><strong>R6 — Strict numeric arguments only.</strong> <code>min=nan</code>,
+        <code>inf</code>, <code>0x1p3</code>, <code>1_000</code>, <code>1e309</code> are rejected;
+        plain decimals (<code>-3</code>, <code>+5</code>, <code>.5</code>, <code>1.5e-3</code>)
+        are accepted.</li>
+    <li><strong>R7 — Non-struct input rejected cleanly.</strong> Ints, strings, maps, nil, and
+        nil pointers produce an explanatory error, never a panic; pointer-to-struct input is
+        accepted and dereferenced.</li>
+    <li><strong>R8 — Schemas are reusable and type-checked.</strong> One built
+        <code>Schema</code> validates many values without state leaking between runs, and rejects
+        a value whose type doesn't match the schema's.</li>
+    <li><strong>R9 — Unexported fields are ignored silently.</strong> Even an impossible tag on
+        an unexported field triggers neither the fail-closed path nor a violation — reflection
+        cannot meaningfully read-check them, so promising to would lie.</li>
+    <li><strong>R10 — The parser survives arbitrary input.</strong> Under fuzzing,
+        <code>parseTag</code> never panics, and an error result always implies nil constraints.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Both execution modes agree.</strong> Every constraint test runs twice:
+        through the naive <code>Validate</code> and through a prebuilt <code>Schema.Validate</code>
+        — the two paths must be behaviorally indistinguishable.</li>
+    <li><strong>NF2 — The performance claim is measured, not asserted.</strong> Benchmarks
+        isolate naive reflection (parse-every-call) against the compiled schema, plus a third
+        benchmark pricing <code>BuildSchema</code> itself so callers can compute their own
+        break-even point.</li>
+    <li><strong>NF3 — Zero dependencies, zero panics.</strong> Stdlib only; no code path panics
+        on hostile input — hostile input gets errors.</li>
+    <li><strong>NF4 — Documented edges stay documented.</strong> Numeric comparisons convert
+        through <code>float64</code>: uint64 values beyond 2<sup>53</sup> lose precision. That is
+        an accepted, tested edge — not a surprise.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Two phases — parse-once plans vs parse-per-call</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">Validate</span>(v <span class="kw">any</span>) <span class="typ">error</span> {
+    ...
+    sp, err := <span class="fn">buildStructPlan</span>(rv.<span class="fn">Type</span>(), <span class="str">""</span>)  <span class="com">// rebuilt EVERY call</span>
+    ...
+}
+
+<span class="kw">func</span> (sc *<span class="typ">Schema</span>) <span class="fn">Validate</span>(v <span class="kw">any</span>) <span class="typ">error</span> {
+    ...
+    sc.plan.<span class="fn">run</span>(rv, &amp;errs)                    <span class="com">// plan built once at BuildSchema</span>
+}</code></pre>
+  <p>Both public entry points execute the <em>same</em> <code>structPlan.run</code>; they differ
+     only in who pays for planning. Naive <code>Validate</code> rebuilds the plan per call —
+     simple, stateless, perfect for startup-time configs validated once. <code>BuildSchema</code>
+     pays planning once and executes forever after — the right shape for hot loops. This is the
+     entire architecture in one sentence: <strong>a validator is a compiler whose IR is a field
+     plan</strong>, and the API question is merely when compilation happens. Keeping one execution
+     engine guarantees the modes can't drift apart behaviorally (NF1 falls out of the structure,
+     not from extra tests).</p>
+
+  <h3>D2: The compiled plan — index chains, not field names</h3>
+  <pre><code><span class="kw">type</span> <span class="typ">fieldPlan</span> <span class="kw">struct</span> {
+    idx    []int       <span class="com">// index chain from the root struct value</span>
+    path   string      <span class="com">// dotted path used in error messages</span>
+    c      constraints <span class="com">// parsed tag — numbers already converted</span>
+    isPtr  bool        <span class="com">// final hop is a pointer</span>
+    nested *structPlan <span class="com">// non-nil when the effective field type is a struct</span>
+}</code></pre>
+  <p>A plan entry records <em>where</em> to find the field (a chain of indices, so promoted
+     embedded fields address as <code>[]int{embedIdx, fieldIdx}</code>), <em>what</em> to check
+     (constraints with parsing already done — <code>oneof</code> split into a slice, min/max held
+     as float64), and <em>where to recurse</em>. At run time there is zero string work: no
+     <code>Tag.Get</code>, no <code>Splits</code>, no <code>ParseFloat</code> — just
+     <code>walk(sv, fp.idx)</code> followed by typed reads. The dotted path is computed at build
+     time too, so even error construction avoids re-deriving names. This shape is deliberately
+     boring: a flat slice of self-contained instructions that <code>range</code> can burn through.</p>
+
+  <h3>D3: Fail-closed applicability, checked per constraint family</h3>
+  <pre><code><span class="kw">if</span> c.minSet &amp;&amp; !<span class="fn">numericKind</span>(t.<span class="fn">Kind</span>()) &amp;&amp; !<span class="fn">lengthKind</span>(t.<span class="fn">Kind</span>()) {
+    <span class="kw">return</span> <span class="fn">notApplicable</span>(<span class="str">"min"</span>)
+}
+<span class="kw">if</span> c.email &amp;&amp; t.<span class="fn">Kind</span>() != reflect.<span class="typ">String</span> {
+    <span class="kw">return</span> <span class="fn">notApplicable</span>(<span class="str">"email"</span>)
+}
+<span class="com">// required/nonzero apply to any type — no check needed</span></code></pre>
+  <p>The tempting shortcut is checking applicability lazily at validation time: skip email on an
+     int, move on. That silently accepts a typo'd or misapplied tag forever — the config author
+     believes protection exists that doesn't. tagforge instead fails closed at <em>build</em>
+     time, and critically, checks <strong>each family independently</strong>: a tag like
+     <code>min=1,email</code> on an int contains one applicable and one inapplicable constraint,
+     and the inapplicable one is still rejected by name. A combined "does any part apply?" check
+     would let the email typo through. Fail-closed means: if we cannot make full sense of your
+     intent, we refuse rather than guess.</p>
+
+  <h3>D4: Aggregation with dotted paths, and nil-pointer semantics</h3>
+  <pre><code>*errs = <span class="fn">append</span>(*errs, <span class="typ">FieldError</span>{fp.path, <span class="str">"must be >= 10"</span>})
+<span class="com">// ValidationError.Error():</span>
+<span class="com">// tagforge: 5 violation(s): Name: ...; Server.Timeout: ...; ...</span></code></pre>
+  <p>Validation stops at the first error is the default everywhere because it's easier — and it's
+     worse UX everywhere, forcing users through fix-one-rerun cycles. tagforge accumulates a
+     <code>[]FieldError</code> through the whole walk and wraps them in one
+     <code>ValidationError</code> implementing <code>error</code> (and discoverable via
+     <code>errors.As</code>). Two rules keep the report honest. First, a zero value violating
+     <code>required</code> short-circuits that field's further checks — piling "min failed" onto
+     an empty string is noise. Second, pointer semantics are explicit: nil violates iff
+     <code>required</code>, optional-nil skips remaining checks entirely (you can't length-check
+     a string that doesn't exist), and crossing an intermediate nil pointer during
+     <code>walk</code> leaves nothing to validate — skipped, not failed.</p>
+
+  <h3>D5: Promotion rules mirror the language's own</h3>
+  <pre><code><span class="kw">if</span> ft.<span class="fn">Kind</span>() == reflect.<span class="typ">Struct</span> &amp;&amp; f.Anonymous {
+    <span class="com">// Embedded structs promote even when the embedded type name</span>
+    <span class="com">// is unexported: reading its exported fields is legal.</span>
+    sub, err := <span class="fn">buildStructPlan</span>(ft, prefix)
+    <span class="kw">for</span> j := <span class="kw">range</span> sub.fields {
+        promoted := sub.fields[j]
+        promoted.idx = <span class="fn">append</span>([]<span class="typ">int</span>{i}, promoted.idx...)
+        sp.fields = <span class="fn">append</span>(sp.fields, promoted)
+    }</code></pre>
+  <p>Go itself promotes embedded fields — <code>cfg.ID</code> works even though
+     <code>embBase</code> is unexported, because <code>ID</code> is exported. The validator
+     matches: an embedded struct's tagged fields flatten into the parent's plan at top-level
+     paths, prefixing each subtree index chain with the embedding field's index. Meanwhile plain
+     unexported fields are detected via <code>f.PkgPath != ""</code> and skipped
+     <strong>silently — including their tags</strong>. That silence is deliberate and tested: an
+     impossible tag on an unexported field must not trip fail-closed, because the library never
+     promised to enforce anything about fields it cannot legitimately read-check.</p>
+
+  <h3>D6: Strict numbers by whitelisting around strconv</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">parseStrictNumber</span>(path, name, arg <span class="typ">string</span>) (<span class="typ">float64</span>, <span class="typ">error</span>) {
+    <span class="kw">if</span> strings.<span class="fn">ContainsAny</span>(strings.<span class="fn">ToLower</span>(arg), <span class="str">"xni_"</span>) {
+        <span class="kw">return</span> <span class="num">0</span>, fmt.<span class="fn">Errorf</span>(<span class="str">"field %s: %s=%q is not a plain decimal number"</span>, path, name, arg)
+    }
+    n, err := strconv.<span class="fn">ParseFloat</span>(arg, <span class="num">64</span>)
+    <span class="kw">if</span> err != <span class="kw">nil</span> || math.<span class="fn">IsNaN</span>(n) || math.<span class="fn">IsInf</span>(n, <span class="num">0</span>) {
+        <span class="kw">return</span> <span class="num">0</span>, fmt.<span class="fn">Errorf</span>(<span class="str">"field %s: %s=%q is not a plain decimal number"</span>, path, name, arg)
+    }
+    <span class="kw">return</span> n, <span class="kw">nil</span>
+}</code></pre>
+  <p><code>strconv.ParseFloat</code> is designed for data interchange, so it happily parses
+     <code>NaN</code>, <code>Inf</code>, hex floats like <code>0x1p3</code>, and underscored
+     literals — none of which belong in a validation tag where <code>min=nAn</code> is far more
+     likely a typo than IEEE semantics. Rather than write a decimal parser, the wrapper bans any
+     argument containing the characters those forms need (<code>x</code>, <code>n</code>,
+     <code>i</code>, <code>_</code>) and then double-checks the parsed result isn't NaN/Inf. One
+     subtle win: banning <code>x/n/i/_</code> also keeps overflow forms like <code>1e309</code>
+     out via the explicit NaN/Inf check on the result — ParseFloat returns ±Inf on overflow,
+     which the second guard catches. Whitelist-first wrapping is the cheap way to make a
+     permissive parser strict without owning its grammar.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>reflect fundamentals — Type vs Value, Kind switches, validity before Elem</h3>
+  <pre><code>rv := reflect.<span class="fn">ValueOf</span>(v)
+<span class="kw">if</span> !rv.<span class="fn">IsValid</span>() {          <span class="com">// ValueOf(nil) is the zero Value</span>
+    <span class="kw">return</span> rv, <span class="kw">false</span>
+}
+<span class="kw">for</span> rv.<span class="fn">Kind</span>() == reflect.<span class="typ">Ptr</span> {
+    <span class="kw">if</span> rv.<span class="fn">IsNil</span>() {
+        <span class="kw">return</span> rv, <span class="kw">false</span>
+    }
+    rv = rv.<span class="fn">Elem</span>()           <span class="com">// safe: Kind was checked, nil was checked</span>
+}</code></pre>
+  <p>Reflection splits the world in two. <code>reflect.Type</code> describes structure — field
+     names, tags, layout — and never changes for a given type, which is why planning walks
+     <code>Type</code> once. <code>reflect.Value</code> holds actual data for one particular
+     value, which is why execution walks <code>Value</code> every call. Confusing them is the
+     source of most reflection bugs. Three disciplines keep it safe. Check
+     <code>IsValid()</code> before anything — <code>reflect.ValueOf(nil)</code> yields a Value on
+     which every other method panics. Check <code>Kind()</code> before <code>Elem()</code> —
+     calling <code>Elem</code> on a non-pointer, or <code>Elem</code> on a nil pointer, panics;
+     the value is telling you what it is if you ask. And dispatch on <code>Kind</code>, not
+     concrete type: <code>min=3</code> must treat <code>int</code>, <code>int64</code>, and a
+     named <code>type Port int</code> identically, and <code>Kind</code> is the axis that erases
+     those distinctions. Note also the split getters: signed kinds read via <code>Int()</code>,
+     unsigned via <code>Uint()</code>, floats via <code>Float()</code> — using the wrong one
+     panics, which is why <code>numValue</code> is an explicit three-way switch.</p>
+
+  <h3>Struct tags are raw strings — the lookup convention is all you get</h3>
+  <pre><code>Timeout <span class="typ">int</span> `validate:"min=10"`
+...
+tag := f.Tag.<span class="fn">Get</span>(<span class="str">"validate"</span>)   <span class="com">// "min=10" — a plain string, nothing more</span></code></pre>
+  <p>There is no <code>validate</code> package in the runtime and no special syntax. The backtick
+     literal lands in the type metadata verbatim, and <code>StructTag.Get</code> merely applies
+     the ecosystem's <code>key:"value"</code> spacing convention to fish one key's string back
+     out. Everything downstream — separator rules, constraint names, arguments — is <em>yours</em>.
+     tagforge's grammar accepts spaces <strong>and commas</strong> between constraints
+     (<code>strings.Fields(strings.ReplaceAll(tag, ",", " "))</code>), matching how the two big
+     conventions in the wild diverge (<code>encoding/json</code> uses commas,
+     <code>validator</code> uses commas with namespace dots — being liberal here costs nothing
+     and spares users the trivia). The lesson generalizes: whenever you see a magical-looking
+     annotation in Go — JSON keys, ORM columns, CLI env names — underneath is a plain string and
+     someone's parser, exactly like the ~20-line one you wrote here.</p>
+
+  <h3>Why precompilation wins — measuring the gap honestly</h3>
+  <pre><code>BenchmarkValidateReflect    ~3,300 ns/op    <span class="com">// reflect walk + tag parse, every call</span>
+BenchmarkValidateSchema       ~170 ns/op    <span class="com">// reflect walk only — plan reused</span>
+BenchmarkBuildSchema        ~6,600 ns/op    <span class="com">// the one-time price, priced separately</span></code></pre>
+  <p>On a six-field config with a nested struct, the compiled path runs roughly
+     <strong>15–25× faster</strong> (numbers above from an M1 Pro; your machine will differ, the
+     ratio's order of magnitude won't). Where does the time go in the slow path?
+     <code>buildStructPlan</code> re-does everything structural per call: <code>NumField</code>
+     iterations, <code>Tag.Get</code> string lookups, <code>strings.Cut/Split</code> allocation,
+     <code>ParseFloat</code> conversions, applicability checks — work whose answer cannot change
+     between calls because it depends only on the type. The compiled path reduces each call to
+     index-chain hops and arithmetic. Crucially, <code>BuildSchema</code> has its own benchmark:
+     at ~6,600 ns/op it costs about twenty schema-path validations, so the break-even is around
+     twenty validations of this type — trivially reached by any server, pointless for a
+     validate-once-at-startup config. That third number is what turns "precompile everything"
+     dogma into an engineering decision you can actually compute.</p>
+
+  <h3>Numeric edge cases — unsigned branches and precision honesty</h3>
+  <pre><code><span class="kw">switch</span> fv.<span class="fn">Kind</span>() {
+<span class="kw">case</span> reflect.<span class="typ">Int</span>, ..., reflect.<span class="typ">Int64</span>:
+    <span class="kw">return</span> <span class="typ">float64</span>(fv.<span class="fn">Int</span>())     <span class="com">// signed branch</span>
+<span class="kw">case</span> reflect.<span class="typ">Uint</span>, ..., reflect.<span class="typ">Uint64</span>:
+    <span class="kw">return</span> <span class="typ">float64</span>(fv.<span class="fn">Uint</span>())    <span class="com">// unsigned branch — separate getter!</span>
+<span class="kw">default</span>:
+    <span class="kw">return</span> fv.<span class="fn">Float</span>()            <span class="com">// Float32/Float64</span>
+}</code></pre>
+  <p>Merging every numeric kind into one <code>float64</code> comparison simplifies the logic
+     enormously — one <code>&lt;</code>, one <code>&gt;</code>, done — but it imports two edge
+     cases you must own explicitly. First, the getters are disjoint APIs: <code>Uint()</code> on
+     a signed value panics and vice versa, hence the branch. Second, <code>float64</code> has 53
+     bits of mantissa, so a <code>uint64</code> like <code>2^60</code> rounds on conversion and a
+     boundary comparison at <code>min=1152921504606846976</code> could judge the wrong side.
+     tagforge documents this as an accepted edge — realistic config bounds live nowhere near
+     2<sup>53</sup>, and the alternative (per-integer-kind comparison paths) would triple the
+     code to guard a case the domain excludes. The transferable judgment call: converting types
+     to simplify logic is fine <em>when the precision loss is characterized, documented, and
+     outside the domain's real range</em> — and dishonest when any of those three is missing.</p>
+
+  <h3>When NOT to reflect</h3>
+  <div class="callout">
+    <p><strong>The rule:</strong> reflection is for structure you can't know at compile time.
+       If generics, interfaces, or plain code can express it, they will be faster, safer, and
+       debuggable with ordinary tools.</p>
+  </div>
+  <p>Three honest boundaries for this stack. <strong>Hot paths:</strong> even the compiled schema
+     pays reflect-based field access per call (~170 ns/op here); a serializer pushing millions of
+     values per second wants codegen or manual marshaling, which is why <code>encoding/json</code>
+     offers <code>Marshaler</code> hooks and protobuf generates code. <strong>Public APIs where
+     generics suffice:</strong> a function that needs to compare or copy values of one shape
+     should take <code>[T any]</code> constraints, not <code>any</code> plus reflection —
+     generics moved a whole category of "flexible" APIs off reflection since Go 1.18. <strong>Cold
+     paths:</strong> conversely, a config validated once at startup doesn't deserve even
+     tagforge's schema abstraction — the naive path's few microseconds, paid once, are cheaper
+     than the cognitive cost of another concept. Reflection is a tool with a real price tag;
+     knowing when <em>not</em> to pay it is half the lesson.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>The constraint × type matrix, executed twice</h3>
+  <pre><code>err := <span class="fn">Validate</span>(tt.val)
+<span class="kw">if</span> got := err != <span class="kw">nil</span>; got != tt.wantErr { ... }
+
+sc, scErr := <span class="fn">BuildSchema</span>(reflect.<span class="fn">TypeOf</span>(tt.val))
+err = sc.<span class="fn">Validate</span>(tt.val)
+<span class="kw">if</span> got := err != <span class="kw">nil</span>; got != tt.wantErr { ... }  <span class="com">// same verdict, second engine</span></code></pre>
+  <p><code>TestConstraints</code> is a table of pass/fail cases spanning every constraint against
+     every applicable type: required on int/string/float/bool, min/max edges on int (boundary
+     values <em>on</em> the limit must pass), floats, uints, string lengths, slice caps, map
+     sizes, the email shapes (missing @, doubled @, empty local, empty domain), oneof members and
+     strangers. The structural trick: every row asserts its verdict <strong>twice</strong> — once
+     through naive <code>Validate</code>, once through a freshly built <code>Schema</code> — so
+     behavioral drift between the two execution modes is impossible to merge. Edge testing leans
+     on boundaries specifically, because <code>&lt;</code> vs <code>&lt;=</code> bugs live exactly
+     at the limit value.</p>
+
+  <h3>Build-time rejection tests for inapplicable combinations</h3>
+  <p><code>TestUnknownConstraint</code> treats misconfiguration as a first-class specification.
+     Unknown tokens must fail with the field and token named. Malformed arguments
+     (<code>min=banana</code>) must fail. Inapplicable constraints (<code>email</code> on an int)
+     must fail — in both engines. And the sharpest case: <strong>co-resident</strong> combos like
+     <code>min=1,email</code> on an int, where one constraint is legal and its neighbor is not —
+     the test demands rejection <em>and</em> that the error name the guilty family
+     (<code>email</code>), proving the per-family independence of D3 rather than a blanket
+     any-part-applies shortcut. <code>TestStrictNumberParsing</code> then sweeps the numeric
+     grammar with a reject list (<code>nan</code>, <code>inf</code>, <code>0x1p3</code>,
+     <code>1_000</code>, <code>1e309</code>) and an accept list (<code>+5</code>, <code>.5</code>,
+     <code>1.5e-3</code>), building throwaway types via <code>reflect.StructOf</code> so each
+     variant gets a fresh struct without ten named declarations.</p>
+
+  <h3>Fuzzing the grammar — arbitrary input, defined failure</h3>
+  <pre><code>f.<span class="fn">Fuzz</span>(<span class="kw">func</span>(t *testing.T, tag <span class="typ">string</span>) {
+    constraints, err := <span class="fn">parseTag</span>(tag)
+    <span class="kw">if</span> err != <span class="kw">nil</span> &amp;&amp; constraints != <span class="kw">nil</span> {
+        t.<span class="fn">Errorf</span>(<span class="str">"parseTag(%q): error must imply nil constraints"</span>, tag)
+    }
+})</code></pre>
+  <p><code>FuzzTagGrammar</code> throws arbitrary strings — NUL bytes, invalid UTF-8, absurd
+     lengths, half-tokens — at the parser and asserts the only invariant that matters: it never
+     panics, and an error always comes back with nil results (never a partial parse masquerading
+     as success). The seeds encode known nasty shapes (<code>"min="</code>,
+     <code>"a=b=c"</code>, <code>"ONEOF=x"</code> for the case-sensitivity trap) so coverage is
+     good even before fuzzing explores. This is the minimal viable fuzz target: pure function in,
+     structured result out, one invariant — exactly the shape worth fuzzing first in any
+     codebase.</p>
+
+  <h3>Benchmark methodology — the honesty note</h3>
+  <div class="callout">
+    <p><strong>The note:</strong> both benchmarks validate the <em>same value</em> through the
+       <em>same execution engine</em> (<code>structPlan.run</code> + <code>checkLeaf</code>).
+       The only difference is whether tag parsing happens inside the timed loop. The measured
+       delta therefore isolates exactly the thing the architecture claims to save — and nothing
+       else.</p>
+  </div>
+  <p>This design choice is what makes the numbers meaningful. If the fast path used different
+     check code, a skeptic could attribute the speedup to leaner validation logic rather than to
+     precompilation. Here that objection is structurally impossible: <code>run</code> is shared,
+     the bench config is shared, and <code>BenchmarkBuildSchema</code> separately prices the
+     setup cost so readers can compute break-even for their own call frequency. When you publish
+     a performance claim, engineer the experiment so the mechanism under test is the only
+     variable — then the number argues for itself.</p>
+
+  <h3>Behavioral contracts as executable cases</h3>
+  <p>The remaining tests pin the semantic fine print that docs alone never seem to hold:
+     <code>TestAggregatesAllViolations</code> requires ≥5 distinct FieldErrors in one pass with
+     paths present (<code>Server.Timeout</code>) and recoverable via <code>errors.As</code>;
+     <code>TestNestedAndEmbeddedPaths</code> asserts promotion positively (<code>ID</code>
+     appears) and negatively (<code>embBase.ID</code> must <em>not</em>);
+     <code>TestPointerHandling</code> walks all four nil/non-nil × required/optional corners;
+     <code>TestSchemaReuse</code> interleaves failing, passing, and failing values through one
+     schema to prove no state leaks, then feeds a mismatched type to prove the type check;
+     <code>TestUnexportedFieldsIgnored</code> plants an impossible tag on an unexported field and
+     demands silence. Each is one sentence of contract, executable.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>Struct-tag-driven reflection is one of the most-traveled roads in the Go ecosystem —
+       you've been benefiting from it since your first <code>json:"name"</code>:</p>
+    <ul>
+      <li><strong><code>encoding/json</code></strong> — the original proof that a raw-string tag
+          convention could power the standard library. Its decoder walks exported fields via
+          reflection, resolves <code>json:"..."</code> options, and caches the field scan per
+          type — tagforge's BuildSchema trick, shipped in 2011.</li>
+      <li><strong>Kubernetes CRD validation culture</strong> — k8s API types carry
+          <code>json:"replicas,omitempty"</code> plus validation markers; controller-gen derives
+          OpenAPI schemas from those tags, and the whole ecosystem's "declarative config with
+          validated structure" posture rests on tag-driven tooling reading Go source.</li>
+      <li><strong>gin / echo binding</strong> — every web framework's
+          <code>c.ShouldBind(&amp;req)</code> decodes JSON into your struct and then runs
+          <code>validator</code> over the same tags' <code>binding:"required,min=1"</code>
+          siblings — the exact decode-then-validate pipeline tagforge isolates down to just the
+          validating half.</li>
+      <li><strong>go-playground/validator internals</strong> — the library you'd use in
+          production implements tagforge's two-phase idea at scale: parse tag strings into cached
+          per-field plans keyed by type, then execute plans per call. You've now built its
+          architecture in miniature.</li>
+    </ul>
+  </div>
+
+  <h3>Why reflection stuck despite its price</h3>
+  <ol>
+    <li><strong>Tags give declarative config a home next to the data it constrains.</strong> The
+        field, its wire name, and its rules sit on one line — readable, diffable, greppable.
+        Every alternative scatters the information: builder patterns move it away from fields,
+        codegen moves it into artifacts, external schemas move it out of the language entirely.
+        The tag convention won because locality wins.</li>
+    <li><strong>The cost problem has a known solution pattern.</strong> Nobody ships
+        parse-tags-per-call validators at scale; the ecosystem converged on caching structural
+        work per type (json's field cache, validator's plan cache, ORM column mappings).
+        Once you recognize the pattern — reflect slowly once, execute quickly forever — you see
+        it across serialization, dependency injection (wire's and fx's reflection versus codegen
+        debate), and ORMs. tagforge made you implement the pattern, measure the gap, and compute
+        the break-even yourself.</li>
+    <li><strong>Reflection cost in serialization stacks is real and measurable.</strong> It's why
+        easyjson and protobuf generate marshalers, why <code>json.Marshal</code> dominates many
+        service flame graphs, and why Go added <code>encoding/json/v2</code> experiments exploring
+        faster paths. Knowing from the inside what a reflective field access costs — and what
+        fraction of it is avoidable planning — lets you read those flame graphs and immediately
+        know which half of the work is structural overhead versus genuine data movement.</li>
+  </ol>
+  <p>The through-line: <code>reflect</code> + a tag string + fail-closed parsing + a precompiled
+     plan is not a teaching toy — it is the load-bearing architecture of Go's entire
+     declarative-config ecosystem, exercised here in ~550 lines with a fuzz target keeping the
+     parser honest and benchmarks keeping the performance story true.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="10-minikv.html">&larr; Previous: minikv</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 11 of 16</span>
+  <a class="btn" href="12-pipeline.html">Next: pipeline &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
