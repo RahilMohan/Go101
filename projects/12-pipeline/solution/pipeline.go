@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sync/errgroup"
@@ -61,6 +62,9 @@ func (g *Graph) Add(t *Task) error {
 	if t.ID == "" {
 		return errors.New("pipeline: task ID must not be empty")
 	}
+	if t.Run == nil {
+		return fmt.Errorf("pipeline: task %q has nil Run", t.ID)
+	}
 	if _, exists := g.tasks[t.ID]; exists {
 		return fmt.Errorf("pipeline: %w: %q", ErrDuplicate, t.ID)
 	}
@@ -73,10 +77,17 @@ func (g *Graph) Add(t *Task) error {
 }
 
 func (g *Graph) Validate() error {
-	for _, t := range g.tasks {
-		for _, dep := range t.Deps {
+	// Deterministic traversal order so that with multiple invalid
+	// graphs the same (lowest-ID) offender is reported every run.
+	ids := make([]string, 0, len(g.tasks))
+	for id := range g.tasks {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		for _, dep := range g.tasks[id].Deps {
 			if _, ok := g.tasks[dep]; !ok {
-				return fmt.Errorf("pipeline: task %q references %w %q", t.ID, ErrUnknownDep, dep)
+				return fmt.Errorf("pipeline: task %q references %w %q", id, ErrUnknownDep, dep)
 			}
 		}
 	}
@@ -110,7 +121,13 @@ func (g *Graph) detectCycles() error {
 					}
 				}
 				chain := append(append([]string(nil), stack[start:]...), dep)
-				return fmt.Errorf("pipeline: %w: %s", ErrCycle, strings.Join(chain, " -> "))
+				// Quote every ID so hostile IDs containing
+				// newlines cannot forge log lines.
+				quoted := make([]string, len(chain))
+				for i, id := range chain {
+					quoted[i] = strconv.Quote(id)
+				}
+				return fmt.Errorf("pipeline: %w: %s", ErrCycle, strings.Join(quoted, " -> "))
 			case white:
 				if err := visit(dep); err != nil {
 					return err
@@ -163,6 +180,23 @@ type completion struct {
 }
 
 const maxWorkers = 16
+
+// runSafely invokes t.Run with panic containment: a panicking task body
+// is converted into a wrapped error (naming the task and the panic
+// value) instead of crashing the process. It also defensively rejects a
+// nil Run func at dispatch time, in case one slipped past Add.
+func runSafely(t *Task, ctx context.Context) (value any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			value = nil
+			err = fmt.Errorf("pipeline: task %q panicked: %v", t.ID, r)
+		}
+	}()
+	if t.Run == nil {
+		return nil, fmt.Errorf("pipeline: task %q has nil Run", t.ID)
+	}
+	return t.Run(ctx)
+}
 
 func (g *Graph) Run(ctx context.Context) (*Results, error) {
 	if err := g.Validate(); err != nil {
@@ -265,7 +299,7 @@ func (g *Graph) Run(ctx context.Context) (*Results, error) {
 					if !ok {
 						return nil
 					}
-					value, err := t.Run(cctx)
+					value, err := runSafely(t, cctx)
 					select {
 					case completions <- completion{id: t.ID, value: value, err: err}:
 					case <-cctx.Done():

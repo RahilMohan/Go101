@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -157,6 +158,94 @@ func TestAddErrors(t *testing.T) {
 	}
 	if err := g.Add(nil); err == nil {
 		t.Fatal("nil-task Add: want error, got nil")
+	}
+}
+
+func TestAddNilRunRejected(t *testing.T) {
+	g := New()
+	err := g.Add(&Task{ID: "norun"})
+	if err == nil {
+		t.Fatal("Add with nil Run: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "nil Run") {
+		t.Fatalf("error = %v; want message mentioning nil Run", err)
+	}
+	if !strings.Contains(err.Error(), "norun") {
+		t.Fatalf("error %q does not name offending task", err.Error())
+	}
+}
+
+func TestTaskPanicBecomesWrappedError(t *testing.T) {
+	g := New()
+	mustAdd(t, g, &Task{ID: "panicky", Run: func(ctx context.Context) (any, error) {
+		panic("boom")
+	}})
+	mustAdd(t, g, &Task{ID: "after", Deps: []string{"panicky"}, Run: func(ctx context.Context) (any, error) {
+		return nil, errors.New("after must never run")
+	}})
+
+	done := make(chan struct{})
+	var res *Results
+	var err error
+	go func() {
+		defer close(done)
+		res, err = g.Run(context.Background())
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after panicking task")
+	}
+
+	if err == nil {
+		t.Fatal("Run with panicking task: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "panicky") || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("Run error %q does not wrap task ID and panic value", err.Error())
+	}
+	if res != nil {
+		t.Fatal("Run returned non-nil Results on panicking task")
+	}
+}
+
+func TestCycleErrorQuotesIDs(t *testing.T) {
+	g := New()
+	noop := func(ctx context.Context) (any, error) { return nil, nil }
+	hostile := "\nFORGED LOG LINE severity=critical"
+	mustAdd(t, g, &Task{ID: hostile, Deps: []string{"y"}, Run: noop})
+	mustAdd(t, g, &Task{ID: "y", Deps: []string{hostile}, Run: noop})
+
+	err := g.Validate()
+	if !errors.Is(err, ErrCycle) {
+		t.Fatalf("Validate error = %v; want errors.Is ErrCycle", err)
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "\n") {
+		t.Fatalf("cycle error contains raw newline (log injection): %q", msg)
+	}
+	for _, member := range []string{hostile, "y"} {
+		if !strings.Contains(msg, strconv.Quote(member)) {
+			t.Fatalf("cycle error %q does not quote member %q", msg, member)
+		}
+	}
+}
+
+func TestUnknownDepDeterministicOffender(t *testing.T) {
+	g := New()
+	noop := func(ctx context.Context) (any, error) { return nil, nil }
+	// Add offenders in non-sorted order; the lowest ID must be reported
+	// deterministically regardless of map iteration order.
+	mustAdd(t, g, &Task{ID: "zz", Deps: []string{"ghost"}, Run: noop})
+	mustAdd(t, g, &Task{ID: "aa", Deps: []string{"ghost"}, Run: noop})
+
+	for i := 0; i < 20; i++ {
+		err := g.Validate()
+		if !errors.Is(err, ErrUnknownDep) {
+			t.Fatalf("Validate error = %v; want errors.Is ErrUnknownDep", err)
+		}
+		if !strings.Contains(err.Error(), `"aa"`) {
+			t.Fatalf("Validate error %q; want lowest-ID offender \"aa\" reported", err.Error())
+		}
 	}
 }
 

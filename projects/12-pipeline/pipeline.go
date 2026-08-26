@@ -52,16 +52,20 @@ func New() *Graph {
 }
 
 // Add registers t in the graph. It reports ErrDuplicate if the ID is
-// already registered and an error if t is nil or has an empty ID.
+// already registered and an error if t is nil, has an empty ID, or has
+// a nil Run func.
 func (g *Graph) Add(t *Task) error {
 	// TODO: Implement
 	return nil
 }
 
 // Validate checks referential integrity and acyclicity. It wraps
-// ErrUnknownDep if any task names a dependency that was never added,
-// and ErrCycle (naming the chain members) if the dependency edges form
-// a cycle.
+// ErrUnknownDep if any task names a dependency that was never added
+// (with multiple offenders, the lowest task ID is reported), and
+// ErrCycle (naming the quoted chain members) if the dependency edges
+// form a cycle. Task execution is panic-safe: a panicking Run func is
+// reported as a wrapped error naming the task instead of crashing the
+// process.
 func (g *Graph) Validate() error {
 	// TODO: Implement
 	return nil
