@@ -10,11 +10,13 @@ Go 1.22+. Standard toolchain only — no external linters.
 Format with `gofmt -w`, vet with `go vet ./...`.
 
 ## File-Scoped Commands
+Each project is its own Go module — run go commands from inside the
+project directory (there is no root go.mod/go.work).
 | Task | Command |
 |------|---------|
-| Test one project | `go test ./projects/NN-slug/...` |
-| Race check | `go test -race ./projects/NN-slug/...` |
-| Vet one project | `go vet ./projects/NN-slug/...` |
+| Test one project | `cd projects/NN-slug && go test ./...` |
+| Race check | `cd projects/NN-slug && go test -race ./solution/...` |
+| Vet one project | `cd projects/NN-slug && go vet ./...` |
 | Format | `gofmt -w <file>` |
 
 ## Repo Layout
@@ -34,11 +36,11 @@ projects/NN-<slug>/solution/  # reference solution, own package
   snippets pasted inline per `design.md` → Documentation Format.
 
 ## Agent Orchestration
-Follow the five-stage pipeline in `design.md` → Agent Orchestration:
-Implement → Review → Document → Adversarial → Reconcile. Gates are
-mandatory; route failed-gate findings back to the producing agent with
-specific findings. Review/adversarial agents get fresh context (files +
-design excerpt only), never the implementer's reasoning.
+Follow the pipeline in `design.md` → Agent Orchestration:
+Implement → Review → Document → Adversarial Fleet (3 seats debate) →
+Reconcile. Gates are mandatory; route failed-gate findings back to the
+producing agent with specific findings. Review/fleet agents get fresh
+context (files + design excerpt only), never the implementer's reasoning.
 
 ## Commit Attribution
 AI commits MUST include:
