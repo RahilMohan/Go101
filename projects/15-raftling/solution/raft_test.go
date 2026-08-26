@@ -325,3 +325,92 @@ func TestRejoinedFollowerCatchesUp(t *testing.T) {
 		return true
 	})
 }
+
+// F1: toggling DropProb at runtime without a Rand must fall back to a
+// deterministic internal source — never panic inside the library-owned
+// pump goroutine, which would kill the whole process.
+func TestDropProbWithoutRandDoesNotKillProcess(t *testing.T) {
+	nodeIDs := []string{"n0", "n1", "n2"}
+	nodes, _, faults := newCluster(t, nodeIDs, nil)
+	for _, id := range nodeIDs {
+		id := id
+		faults[id].Mutate(func(p *Policy) { p.DropProb = 0.4 }) // Rand deliberately nil
+	}
+	mustSet(t, nodes, "survives", "misconfig")
+	eventually(t, testWait, "all replicas converge despite nil-Rand drops", func() bool {
+		for _, n := range nodes {
+			if n.Snapshot()["survives"] != "misconfig" {
+				return false
+			}
+		}
+		return true
+	})
+}
+
+// F2: a leader receiving an AppendEntries rejection bearing a higher
+// term must step down immediately (Raft §5.1).
+func TestLeaderStepsDownOnHigherTermAppendResp(t *testing.T) {
+	nodes, hub, _ := newCluster(t, []string{"n0", "n1", "n2"}, []string{"ghost"})
+	var leader *Node
+	eventually(t, testWait, "leader elected", func() bool {
+		leader = soleLeader(nodes)
+		return leader != nil
+	})
+	term := leader.Status().Term
+	hub.Transport("ghost").Send(Message{
+		Type:    MsgAppendEntriesResp,
+		From:    "ghost",
+		To:      leader.ID(),
+		Term:    term + 7,
+		Success: false,
+	})
+	eventually(t, testWait, "leader stepped down on higher-term rejection", func() bool {
+		s := leader.Status()
+		return s.State == Follower && s.Term >= term+7
+	})
+}
+
+// LOW-1: WithTiming must normalize inverted election bounds instead of
+// producing a negative jitter span (rand.Int63n panic), and equal
+// bounds must not panic either.
+func TestWithTimingNormalizesInvertedElectionBounds(t *testing.T) {
+	cg := config{
+		heartbeat:   defaultHeartbeat,
+		electionMin: defaultElectionMin,
+		electionMax: defaultElectionMax,
+		rpcTimeout:  defaultRPCTimeout,
+	}
+	WithTiming(5*time.Millisecond, 400*time.Millisecond, 300*time.Millisecond, time.Second)(&cg)
+	if cg.heartbeat != 5*time.Millisecond || cg.rpcTimeout != time.Second {
+		t.Fatalf("WithTiming ignored overrides: hb=%v rpc=%v", cg.heartbeat, cg.rpcTimeout)
+	}
+	if cg.electionMin > cg.electionMax {
+		t.Fatalf("inverted bounds not normalized: min=%v max=%v", cg.electionMin, cg.electionMax)
+	}
+	if cg.electionMin != 300*time.Millisecond || cg.electionMax != 400*time.Millisecond {
+		t.Fatalf("bounds = min=%v max=%v, want swapped 300ms/400ms", cg.electionMin, cg.electionMax)
+	}
+	nodes, _, _ := newCluster(
+		t, []string{"only"}, nil,
+		WithTiming(defaultHeartbeat, 120*time.Millisecond, 120*time.Millisecond, time.Second),
+	)
+	eventually(t, testWait, "leader elected with equal election bounds", func() bool {
+		return nodes[0].Status().State == Leader
+	})
+}
+
+// LOW-2: a full request channel is local backpressure and must be
+// reported as ErrBusy, not ErrNoQuorum.
+func TestFullRequestChannelReturnsErrBusy(t *testing.T) {
+	hub := NewHub("solo")
+	t.Cleanup(hub.Close)
+	n := New("solo", []string{"solo"}, hub.Transport("solo"),
+		WithTiming(defaultHeartbeat, defaultElectionMin, defaultElectionMax, 80*time.Millisecond))
+	for i := 0; i < cap(n.reqCh); i++ {
+		n.reqCh <- &request{resp: make(chan reqResult, 1)}
+	}
+	err := n.Set("k", "v")
+	if !errors.Is(err, ErrBusy) {
+		t.Fatalf("Set with full reqCh = %v, want ErrBusy", err)
+	}
+}

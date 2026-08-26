@@ -95,8 +95,10 @@ type Policy struct {
 	Delay time.Duration
 	// Reorder swaps each adjacent pair of messages before delivery.
 	Reorder bool
-	// Rand is the source used for DropProb decisions. It is required
-	// when DropProb > 0; supply a seeded rand.Rand for determinism.
+	// Rand is the source used for DropProb decisions. Supply a
+	// seeded rand.Rand for determinism; if nil, a deterministic
+	// internal fallback source is used instead (a misconfigured
+	// policy must never panic mid-flight).
 	Rand *rand.Rand
 }
 
@@ -140,10 +142,15 @@ func (f *FaultTransport) observe() (drop bool, delay time.Duration) {
 	f.n++
 	drop = f.pol.DropAll
 	if !drop && f.pol.DropProb > 0 {
-		if f.pol.Rand == nil {
-			panic("raft: Policy.DropProb requires Policy.Rand")
+		src := f.pol.Rand
+		if src == nil {
+			// Never panic here: the inbound path runs inside the
+			// library-owned pump goroutine, where a panic would kill
+			// the whole process. Fall back to a deterministic source
+			// seeded by the per-wrapper message counter.
+			src = rand.New(rand.NewSource(int64(f.n)))
 		}
-		drop = f.pol.Rand.Float64() < f.pol.DropProb
+		drop = src.Float64() < f.pol.DropProb
 	}
 	return drop, f.pol.Delay
 }

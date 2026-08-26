@@ -259,6 +259,11 @@ func (r *replica) conflictHint(prev uint64) uint64 {
 }
 
 func (r *replica) handleAppendResp(m Message) {
+	if m.Term > r.term {
+		// Raft §5.1: any message bearing a higher term — including a
+		// rejection of our own AppendEntries — forces a step down.
+		r.stepDown(m.Term)
+	}
 	if r.state != Leader || m.Term != r.term {
 		return
 	}

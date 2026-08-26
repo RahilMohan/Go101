@@ -29,6 +29,10 @@ var (
 	ErrNoQuorum = errors.New("raft: no quorum reached")
 	// ErrStopped means the node's event loop has shut down.
 	ErrStopped = errors.New("raft: node stopped")
+	// ErrBusy means the node's local request queue was full — client
+	// backpressure on this node, not a quorum problem. Retry shortly
+	// or route to another node.
+	ErrBusy = errors.New("raft: request queue full")
 )
 
 const (
@@ -174,8 +178,13 @@ func WithTiming(heartbeat, electionMin, electionMax, rpcTimeout time.Duration) O
 		if electionMin > 0 {
 			cg.electionMin = electionMin
 		}
-		if electionMax > electionMin {
+		if electionMax > 0 {
 			cg.electionMax = electionMax
+		}
+		if cg.electionMax < cg.electionMin {
+			// Normalize inverted bounds so the election-jitter span
+			// can never go negative.
+			cg.electionMin, cg.electionMax = cg.electionMax, cg.electionMin
 		}
 		if rpcTimeout > 0 {
 			cg.rpcTimeout = rpcTimeout
@@ -199,6 +208,9 @@ func newConfig(opts []Option) config {
 
 func (c *config) electionTimeout() time.Duration {
 	span := c.electionMax - c.electionMin
+	if span <= 0 {
+		return c.electionMin
+	}
 	if c.rand != nil {
 		return c.electionMin + time.Duration(c.rand.Int63n(int64(span)))
 	}
@@ -359,7 +371,7 @@ func (n *Node) call(req request) (string, bool, error) {
 	select {
 	case n.reqCh <- &req:
 	case <-ctx.Done():
-		return "", false, ErrNoQuorum
+		return "", false, ErrBusy
 	}
 	select {
 	case res := <-req.resp:

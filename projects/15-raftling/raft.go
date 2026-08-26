@@ -29,6 +29,10 @@ var (
 	ErrNoQuorum = errors.New("raft: no quorum reached")
 	// ErrStopped means the node's event loop has shut down.
 	ErrStopped = errors.New("raft: node stopped")
+	// ErrBusy means the node's local request queue was full — client
+	// backpressure on this node, not a quorum problem. Retry shortly
+	// or route to another node.
+	ErrBusy = errors.New("raft: request queue full")
 )
 
 const (
