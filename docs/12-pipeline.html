@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 12 — pipeline</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+
+    /* Glassmorphism hover-lift on callout/sidebar panels */
+    .callout, .sidebar { transition: box-shadow 300ms ease, border-color 300ms ease; }
+    .callout:hover {
+      border-color: rgba(210,153,34,0.70);
+      box-shadow: inset 0 1px 0 rgba(230,237,243,0.06), 0 8px 32px rgba(210,153,34,0.10);
+    }
+    .sidebar:hover {
+      border-color: rgba(188,140,255,0.70);
+      box-shadow: inset 0 1px 0 rgba(230,237,243,0.06), 0 8px 32px rgba(188,140,255,0.10);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>pipeline</h1>
+  <p class="subtitle">Go101 · Project 12 — DAG workflow orchestrator</p>
+  <div class="badge-row">
+    <span class="badge tier">Advanced Tier</span>
+    <span class="badge">generics</span>
+    <span class="badge">errgroup</span>
+    <span class="badge">channels</span>
+    <span class="badge">context</span>
+    <span class="badge">DAG execution</span>
+    <span class="badge">Deadlock avoidance</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: generics + errgroup + channels</h3>
+  <p>pipeline is built from three load-bearing pieces: Go's type parameters (for type-safe
+     result retrieval), <code>golang.org/x/sync/errgroup</code> (for structured concurrency),
+     and plain unbuffered channels (for dispatch and completion handoff). One honest note up
+     front: unlike every project so far, this one carries a single external dependency —
+     <code>errgroup</code>. It earns its place because it is barely a library at all: about two
+     hundred lines of <code>sync.WaitGroup</code> plus a derived context, i.e., the exact glue
+     you'd write yourself, battle-tested. Everything else — the DAG scheduler, the worker pool,
+     cycle detection, cancellation semantics — is yours.</p>
+  <table>
+    <thead>
+      <tr><th>Piece</th><th>Role in pipeline</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>[T any]</code> generics</td><td><code>Get[T](results, id)</code> retrieves a task's result with a compile-checked type, returning the zero value and <code>false</code> on wrong-type, missing ID, or nil receiver</td><td>Type parameters shine when they turn runtime panics (<code>v.(int)</code> on a string) into compile-time guarantees — without reflection and without per-type wrappers</td></tr>
+      <tr><td><code>errgroup.WithContext</code></td><td>Ties dispatcher + workers into one structured unit: any returned error cancels the derived context, and <code>eg.Wait()</code> joins every goroutine before returning</td><td>Structured concurrency means lifetime is lexically scoped: nothing outlives the function that spawned it — no leaks by construction, not by vigilance</td></tr>
+      <tr><td>Unbuffered channels</td><td><code>ready</code> hands tasks dispatcher→worker; <code>completions</code> reports results worker→dispatcher. The handoff itself is the semaphore: at most len(workers) tasks are ever in flight</td><td>An unbuffered channel rendezvous is the cheapest correct bound there is — capacity control falls out of the send blocking, no counters needed</td></tr>
+      <tr><td><code>context.Context</code></td><td>Caller context derives the group context; every blocking operation selects on <code>cctx.Done()</code>, so cancellation reaches even a dispatcher blocked mid-send</td><td>Cancellation must propagate to <em>every</em> blocking point, not just task bodies — the scheduler is part of the cancellation surface</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>Actor frameworks (proto.actor, ergo)</strong> — mailbox-per-task actor models
+        can express DAG execution, but they invert the pedagogy: instead of learning how
+        scheduling, backpressure, and cancellation actually work, you learn one framework's
+        supervision tree. They also hide the exact bug this project exists to teach — the
+        blocked-dispatcher deadlock — behind framework internals. After building pipeline,
+        you can read an actor framework's docs and know what its mailboxes are doing for you.</li>
+    <li><strong><code>sync.WaitGroup</code>-only fan-out/fan-in</strong> — spawning one goroutine
+        per task and waiting on all of them is the naive first draft. It cannot bound
+        concurrency (a 10,000-task graph means 10,000 live goroutines and their stacks), it has
+        no story for early failure (one task failing still runs all siblings to completion), and
+        wiring cancellation through it means bolting channels back on anyway. WaitGroup remains
+        the right tool inside each layer — here, it isn't used at all because errgroup subsumes
+        it.</li>
+    <li><strong>Topological-sort-then-run (level-by-level)</strong> — computing full topological
+        levels before running anything is simpler, but it serializes independent work: a level
+        finishes entirely before the next starts, so one slow straggler idles the whole pool.
+        Kahn's algorithm executed incrementally (in-degree countdown as tasks complete) keeps
+        the ready queue flowing continuously — which is what pipeline implements.</li>
+    <li><strong>Workflow engines (Temporal, Cadence as dependencies)</strong> — the production
+        answer for durable workflows, and wildly overkill: they bring persistence, retries,
+        versioning, and cross-process durability. This project builds the in-memory core those
+        systems wrap, so their abstractions become legible rather than magical.</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>DAG execution as an ownership problem.</strong> The hardest concurrency bugs
+        come from shared mutable state touched by many goroutines. pipeline's answer — one
+        dispatcher goroutine owns <em>all</em> scheduling state (in-degrees, ready queue,
+        results map) while workers stay stateless — eliminates locks not by cleverness but by
+        architecture. Internalizing "single-owner state beats shared-state-plus-mutex" changes
+        how you design every concurrent system afterward.</li>
+    <li><strong>errgroup as the shape of structured concurrency.</strong> Any goroutine
+        returning an error cancels everyone; <code>Wait</code> joins everything; the caller gets
+        one error. You'll implement dispatcher, workers, and cancellation propagation against
+        that contract, and learn where its edges are (it does not recover panics — more below).</li>
+    <li><strong>Generics at the API boundary.</strong> Tasks produce <code>any</code>; consumers
+        want typed values. <code>Get[T]</code> shows the idiomatic reconciliation — store
+        untyped, retrieve typed, fail soft — and why <code>(T, bool)</code> beats both
+        reflection and panic-on-mismatch.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>pipeline_test.go</code> — the executable specification. If
+     your implementation passes these tests under <code>go test -race</code>, it satisfies the
+     requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Linear chains execute strictly in dependency order.</strong> A task whose
+        dependency hasn't published its result yet must observe that absence and fail — the
+        tests plant shared-state probes so "ran too early" is detected, not assumed.</li>
+    <li><strong>R2 — Diamond fan-out/fan-in works.</strong> Two parallel children of one parent,
+        joined by a dependent that sees both results, complete correctly.</li>
+    <li><strong>R3 — Wide graphs execute in parallel.</strong> Fifty independent tasks run with
+        order-independent results; a stress test of 200 sleeping tasks observes maximum
+        concurrency ≥ 2 via atomic CAS bookkeeping, proving genuine parallelism.</li>
+    <li><strong>R4 — Graph construction validates inputs.</strong> Duplicate IDs wrap
+        <code>ErrDuplicate</code> (checkable with <code>errors.Is</code>); empty IDs, nil tasks,
+        and nil <code>Run</code> funcs are rejected with errors naming the offender.</li>
+    <li><strong>R5 — Invalid graphs fail before running.</strong> Unknown dependencies wrap
+        <code>ErrUnknownDep</code>; cycles — including self-cycles — wrap <code>ErrCycle</code>
+        naming every chain member. Both surface identically from <code>Validate</code> and
+        from <code>Run</code>.</li>
+    <li><strong>R6 — Validation output is deterministic and injection-safe.</strong> With
+        multiple invalid entries, the lowest-ID offender is reported every run (map iteration
+        order must not leak into messages); hostile IDs containing newlines appear
+        <code>strconv.Quote</code>d so forged log lines can't be smuggled into error text.</li>
+    <li><strong>R7 — First failure cancels siblings and wraps cleanly.</strong> A task returning
+        an error causes in-flight siblings to stop via context, <code>Run</code> returns within
+        bounded time, the error wraps the original sentinel (<code>errors.Is</code>) and names
+        the failing task, and <code>Results</code> is nil.</li>
+    <li><strong>R8 — Caller cancellation propagates in bounded time.</strong> Cancelling the
+        caller's context mid-run makes <code>Run</code> return <code>context.Canceled</code>
+        well under a 5-second cap, with no typed results retrievable afterwards.</li>
+    <li><strong>R9 — Panicking tasks don't kill the process.</strong> A task body that panics
+        surfaces as a wrapped error naming the task and the panic value; dependents never run;
+        <code>Run</code> returns normally.</li>
+    <li><strong>R10 — Typed result retrieval is safe on every path.</strong>
+        <code>Get[int]</code>/<code>Get[string]</code> succeed on matches; wrong type, missing
+        ID, and nil <code>*Results</code> all yield the zero value and <code>false</code> —
+        never a panic.</li>
+    <li><strong>R11 — Empty graphs succeed.</strong> Zero tasks produce non-nil, empty
+        <code>Results</code> without spawning workers.</li>
+    <li><strong>R12 — Consumers only start after deps publish.</strong> A consumer gated behind
+        a deliberately blocked dependency must not run during the blockage (asserted by
+        observing Run hasn't returned after 100 ms), then completes once released.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Race-clean under the detector.</strong> All suites pass
+        <code>go test -race</code>: the results map is written only by one goroutine and read
+        only after a happens-before edge established by <code>eg.Wait()</code>.</li>
+    <li><strong>NF2 — No goroutine leaks.</strong> Every spawned goroutine exits on channel
+        close, context cancellation, or error return; <code>Run</code> leaves goroutine counts
+        unchanged (verified empirically during adversarial review).</li>
+    <li><strong>NF3 — Bounded worker pool.</strong> In-flight tasks never exceed
+        <code>maxWorkers</code> (16); a 10k-task wide graph completes in milliseconds-scale
+        time on a laptop (exact figures are machine-dependent).</li>
+    <li><strong>NF4 — Repeated Runs are independent.</strong> All scheduling state lives inside
+        one <code>Run</code> invocation; the same <code>*Graph</code> can be run repeatedly,
+        even concurrently, without state leaking between invocations.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Dispatcher-multiplexed worker pool — single-owner state</h3>
+  <pre><code><span class="com">// Dispatcher: sole owner of scheduling state. When all workers are
+// busy, the dispatcher multiplexes between offering the next ready
+// task and collecting completions — blocking on either alone would
+// deadlock the other side.</span>
+eg.<span class="fn">Go</span>(<span class="kw">func</span>() <span class="typ">error</span> {
+    ...
+    <span class="kw">if</span> len(queue) &gt; <span class="num">0</span> {
+        <span class="kw">select</span> {
+        <span class="kw">case</span> ready &lt;- queue[<span class="num">0</span>]:
+            queue = queue[<span class="num">1</span>:]
+            <span class="kw">continue</span>
+        <span class="kw">case</span> &lt;-cctx.<span class="fn">Done</span>():
+            <span class="kw">return</span> cctx.<span class="fn">Err</span>()
+        <span class="kw">case</span> ev = &lt;-completions:
+        }
+    }...</code></pre>
+  <p>The entire scheduler is one goroutine owning three pieces of mutable state — the in-degree
+     map, the ready queue, and the results map. Workers are stateless: receive, run, report.
+     Because only the dispatcher writes the results map, and callers read it only after
+     <code>eg.Wait()</code> returns (which establishes a happens-before edge with the
+     dispatcher's exit), there are no mutexes anywhere and the race detector stays silent by
+     construction. This is the design lesson worth keeping: <strong>a mutex is often the symptom
+     of a missed ownership decision</strong>. Ask "which single goroutine should own this data?"
+     before asking "how do I lock this data?"</p>
+
+  <h3>D2: The multiplex fix — why the dispatcher must select on both directions</h3>
+  <pre><code><span class="com">// First version (deadlock-prone):</span>
+<span class="kw">case</span> ready &lt;- queue[<span class="num">0</span>]:   <span class="com">// blocks until a worker takes it</span>
+<span class="com">// ...but completions pile up unread meanwhile!</span></code></pre>
+  <p>This fix came straight out of adversarial review, and it's the deepest lesson in the
+     project. Consider the naive dispatcher that blocks sending on <code>ready</code> whenever
+     all workers are busy. Now suppose every worker is itself blocked trying to send its
+     completion on <code>completions</code>. Nobody can take a new task until someone frees up;
+     nobody frees up until the dispatcher reads their completions; the dispatcher can't read
+     completions because it's stuck offering work. Classic four-way handshake deadlock —
+     reachable with as few as three tasks. The repair: when the queue is non-empty, a single
+     <code>select</code> multiplexes <em>sending</em> work, <em>receiving</em> completions, and
+     <code>cctx.Done()</code>, so progress is always possible from at least one direction. When
+     the queue is empty, the dispatcher simply waits for completions. The general rule:
+     <strong>any goroutine that feeds and drains a ring of peers must be able to make progress
+     in both directions concurrently</strong>.</p>
+
+  <h3>D3: Unbuffered channels as semaphore and synchronization point</h3>
+  <pre><code>ready := <span class="fn">make</span>(<span class="kw">chan</span> *<span class="typ">Task</span>)
+completions := <span class="fn">make</span>(<span class="kw">chan</span> <span class="typ">completion</span>)
+...
+workers := len(g.tasks)
+<span class="kw">if</span> workers &gt; maxWorkers {
+    workers = maxWorkers   <span class="com">// capped at 16</span>
+}</code></pre>
+  <p>Both channels are unbuffered, deliberately. On the <code>ready</code> side this makes the
+     handoff itself the concurrency limit: a send completes only when a free worker receives,
+     so at most <code>len(workers)</code> tasks are ever executing — no separate semaphore, no
+     counter to drift. On the <code>completions</code> side it forces every finished task's
+     result through the dispatcher's ownership boundary, keeping the state machine single-writer.
+     Buffering would feel faster but would silently break both properties: buffered sends don't
+     block, so the bound evaporates and completions could arrive while the dispatcher believes
+     otherwise. The worker count is min(number of tasks, 16) — enough to exploit parallelism in
+     stress tests, small enough that a pathological graph can't spawn thousands of goroutines.</p>
+
+  <h3>D4: Panic containment at the boundary — <code>runSafely</code></h3>
+  <pre><code><span class="kw">func</span> <span class="fn">runSafely</span>(t *<span class="typ">Task</span>, ctx context.<span class="typ">Context</span>) (value <span class="kw">any</span>, err <span class="typ">error</span>) {
+	<span class="kw">defer func</span>() {
+		<span class="kw">if</span> r := <span class="fn">recover</span>(); r != <span class="kw">nil</span> {
+			value = <span class="kw">nil</span>
+			err = fmt.<span class="fn">Errorf</span>(<span class="str">"pipeline: task %q panicked: %v"</span>, t.ID, r)
+		}
+	}()
+	<span class="kw">if</span> t.Run == <span class="kw">nil</span> {
+		<span class="kw">return nil</span>, fmt.<span class="fn">Errorf</span>(<span class="str">"pipeline: task %q has nil Run"</span>, t.ID)
+	}
+	<span class="kw">return</span> t.<span class="fn">Run</span>(ctx)
+}</code></pre>
+  <p>Two hardening decisions landed here after adversarial review flagged them. First, a nil
+     <code>Run</code> func was originally accepted by <code>Add</code> and crashed the process
+     at dispatch time — a nil function dereference inside an errgroup-spawned goroutine is
+     unrecoverable from the caller, so one malformed task took down the whole binary.
+     <code>Add</code> now rejects it eagerly, and <code>runSafely</code> checks defensively
+     again in case one slips past. Second, errgroup famously does <em>not</em> recover panics
+     from its goroutines — a panicking task body would crash everything. Since an orchestrator's
+     whole contract is "failures come back as errors," the wrapper converts panics into wrapped
+     errors carrying the task ID and panic value, which then flow through the normal
+     cancellation machinery. The transferable rule: <strong>at any boundary where you invoke
+     arbitrary user code inside a library-managed goroutine, recover and convert</strong> —
+     the alternative is your library having a remote-code-crash primitive.</p>
+
+  <h3>D5: Fail-fast validation with deterministic, injection-safe errors</h3>
+  <pre><code>sort.<span class="fn">Strings</span>(ids)   <span class="com">// deterministic traversal order</span>
+...
+chain := <span class="fn">append</span>(<span class="fn">append</span>([]<span class="typ">string</span>(<span class="kw">nil</span>), stack[start:]...), dep)
+quoted := <span class="fn">make</span>([]<span class="typ">string</span>, len(chain))
+<span class="kw">for</span> i, id := <span class="kw">range</span> chain {
+    quoted[i] = strconv.<span class="fn">Quote</span>(id)   <span class="com">// hostile IDs cannot forge log lines</span>
+}
+<span class="kw">return</span> fmt.<span class="fn">Errorf</span>(<span class="str">"pipeline: %w: %s"</span>, ErrCycle, strings.<span class="fn">Join</span>(quoted, <span class="str">" -&gt; "</span>))</code></pre>
+  <p>Validation runs before any goroutine spawns: unknown deps first (cheap map lookups), then a
+     white/gray/black DFS for cycles that reconstructs the offending chain from its own stack.
+     Two details repay attention. <strong>Determinism:</strong> map iteration order is random,
+     so both validation passes sort IDs first — the same invalid graph reports the same
+     lowest-ID offender on every run, making tests and bug reports reproducible.
+     <strong>Injection safety:</strong> task IDs are attacker-controlled strings; an ID like
+     <code>"\nFORGED LOG LINE severity=critical"</code> interpolated raw into an error could
+     forge additional log lines downstream. Quoting every member with
+     <code>strconv.Quote</code> neutralizes control characters, and a test plants exactly such
+     an ID to prove no raw newline survives. Treating error text as an output channel that
+     needs sanitizing is a habit most codebases learn the hard way.</p>
+
+  <h3>D6: Error precedence — the caller's context wins</h3>
+  <pre><code>waitErr := eg.<span class="fn">Wait</span>()
+<span class="com">// Cancellation of the caller's context takes precedence: report
+// ctx.Err() even if some in-flight task also surfaced an error.</span>
+<span class="kw">if</span> err := ctx.<span class="fn">Err</span>(); err != <span class="kw">nil</span> {
+    <span class="kw">return nil</span>, err
+}
+<span class="kw">if</span> waitErr != <span class="kw">nil</span> {
+    <span class="kw">return nil</span>, waitErr
+}
+<span class="kw">return</span> &amp;<span class="typ">Results</span>{vals: results}, <span class="kw">nil</span></code></pre>
+  <p>When a run ends, several things may be true at once: the caller cancelled, and/or a task
+     failed. Which error should <code>Run</code> return? The chosen precedence — caller
+     cancellation first — encodes an honest causal story: if you cancelled the run, the
+     informative answer is <code>context.Canceled</code>, not whatever error some interrupted
+     task happened to emit while being torn down (task functions racing cancellation often
+     produce spurious errors of their own). Only when the caller's context is clean does the
+     first task error surface, wrapped with the failing task's ID so
+     <code>errors.Is</code> works on sentinels. Error-selection rules are API design: decide
+     them explicitly, document them, and test them — ambiguity here multiplies into flaky
+     assertions downstream.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>errgroup patterns — one contract, three behaviors</h3>
+  <pre><code>eg, cctx := errgroup.<span class="fn">WithContext</span>(ctx)
+eg.<span class="fn">Go</span>(<span class="kw">func</span>() <span class="typ">error</span> { ... })   <span class="com">// dispatcher + N workers</span>
+waitErr := eg.<span class="fn">Wait</span>()</code></pre>
+  <p><code>errgroup.WithContext</code> bundles three mechanisms into one object. <strong>WaitGroup
+     semantics:</strong> <code>Wait</code> blocks until every function passed to <code>Go</code>
+     has returned — the join point that makes goroutine leaks structurally impossible here,
+     since <code>Run</code> cannot return while any worker lives. <strong>Error capture:</strong>
+     the first non-nil return wins; subsequent errors are dropped, and that first error is what
+     <code>Wait</code> yields — pipeline wraps it with the failing task's identity along the way.
+     <strong>Derived context:</strong> the second return value <code>cctx</code> is cancelled
+     when the first goroutine fails <em>or</em> when the parent context cancels — which is how
+     one task's failure becomes every sibling's problem without anyone wiring signals manually.
+     Note what errgroup does <em>not</em> do: it doesn't recover panics and doesn't limit
+     concurrency by itself. Both gaps are filled explicitly here — <code>runSafely</code> for
+     the former, the fixed pool size for the latter.</p>
+
+  <h3>Context cancellation propagation — reaching every blocking point</h3>
+  <pre><code><span class="kw">for</span> {
+    <span class="kw">select</span> {
+    <span class="kw">case</span> &lt;-cctx.<span class="fn">Done</span>():
+        <span class="kw">return nil</span>          <span class="com">// workers exit promptly mid-idle</span>
+    <span class="kw">default</span>:
+    }
+    <span class="kw">select</span> {
+    <span class="kw">case</span> t, ok := &lt;-ready:
+        ...
+    <span class="kw">case</span> &lt;-cctx.<span class="fn">Done</span>():
+        <span class="kw">return nil</span>
+    }
+}</code></pre>
+  <p>The subtle discipline: cancellation must reach <em>every place a goroutine can block</em>,
+     not just task bodies. Workers can block receiving from <code>ready</code> — so that receive
+     shares a select with <code>cctx.Done()</code>. Workers can also block <em>sending</em> to
+     <code>completions</code> (the dispatcher may have already exited after its own cancellation
+     branch) — so the completion send is likewise guarded. The dispatcher guards both its send
+     and receive paths. Miss any one of these and cancellation stops being prompt: the
+     bounded-time test exists precisely because "it propagates eventually" and "it propagates
+     quickly" are indistinguishable by reading code. Also notice the pre-check at the top of the
+     loop: a cancelled-before-start worker exits immediately rather than waiting for a receive
+     that will race with Done — selecting fairly between an always-ready channel and a closed
+     one is nondeterministic, so the explicit check removes the coin flip.</p>
+
+  <h3>Deadlock avoidance — the four-way handshake trap</h3>
+  <div class="callout">
+    <p><strong>The scenario:</strong> dispatcher blocked sending task T (pool full) · workers
+       blocked sending completions (nobody reading) · completions can't be read (dispatcher
+       blocked) · T can't be taken (workers blocked). Four parties, zero progress, forever.</p>
+  </div>
+  <p>This deadlock is invisible to the race detector and won't reproduce in small graphs by
+     luck — it needs the exact timing of "pool saturated + dispatcher holding a ready task."
+     The cure is architectural, not a timeout band-aid: restructure the dispatcher's loop so
+     that whenever it holds work to offer, it simultaneously remains receptive to completions.
+     In Go that restructuring <em>is</em> a <code>select</code> with both directions plus Done.
+     The deeper skill being taught is <strong>deadlock reasoning as cycle-finding over a
+     wait-for graph</strong>: draw an arrow from each blocked goroutine to whatever it waits
+     on; a directed cycle among the arrows predicts deadlock. Before shipping concurrent code,
+     draw the arrows. If any cycle exists among blocking operations that aren't broken by
+     context or buffering, you've shipped a time bomb that stress and timing will eventually
+     detonate.</p>
+
+  <h3>Generics via <code>Get[T]</code> — untyped storage, typed retrieval</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">Get</span>[T <span class="kw">any</span>](r *<span class="typ">Results</span>, id <span class="typ">string</span>) (T, <span class="typ">bool</span>) {
+	<span class="kw">var</span> zero T
+	<span class="kw">if</span> r == <span class="kw">nil</span> {
+		<span class="kw">return</span> zero, <span class="kw">false</span>
+	}
+	v, ok := r.vals[id]
+	<span class="kw">if</span> !ok {
+		<span class="kw">return</span> zero, <span class="kw">false</span>
+	}
+	t, ok := v.(T)
+	<span class="kw">return</span> t, ok
+}</code></pre>
+  <p>Tasks return <code>(any, error)</code> — unavoidable, since a heterogeneous DAG's outputs
+     differ per node and Go's type system won't track per-ID types through a map. The generic
+     accessor reconciles convenience with safety: the caller states the expected type once at
+     the call site, the type assertion checks it at runtime, and every failure mode — wrong
+     type, missing ID, nil receiver — degrades to <code>(zero, false)</code> instead of a panic.
+     Three small idioms deserve note. <code>var zero T</code> is the standard way to produce a
+     zero value of a type parameter. The nil-receiver guard lets callers write
+     <code>Get[string](res, x)</code> without pre-checking <code>res</code> after a failed run —
+     mirroring how nil maps and nil slices are safe to read. And the comma-ok form keeps the
+     API total: there is no input for which <code>Get</code> panics, which makes it usable in
+     defer blocks, cleanup paths, and tests without ceremony.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Bounded-time cancellation — asserting latency, not just correctness</h3>
+  <pre><code>begin := time.<span class="fn">Now</span>()
+res, err := g.<span class="fn">Run</span>(ctx)
+elapsed := time.<span class="fn">Since</span>(begin)
+
+<span class="kw">const</span> budget = <span class="num">5</span> * time.Second
+<span class="kw">if</span> elapsed &gt;= budget {
+    t.<span class="fn">Fatalf</span>(<span class="str">"Run took %v after cancellation; want return within %v"</span>, elapsed, budget)
+}
+<span class="kw">if</span> !errors.<span class="fn">Is</span>(err, context.Canceled) { ... }</code></pre>
+  <p>The nastiest failure mode of an orchestrator is hanging — and a hang looks identical to
+     "slow CI" unless you measure. <code>TestCancellationPropagationBoundedTime</code> starts
+     two tasks that block until their context is done, cancels roughly 50–60 ms in (both
+     started, short settle delay), and asserts <code>Run</code> returns <em>well under a 5-second
+     wall-clock cap</em> with <code>errors.Is(err, context.Canceled)</code> and no typed results.
+     The generous cap is deliberate: the assertion targets deadlocks and lost cancellations
+     (which blow past 5 s instantly), not scheduler micro-latency, so it stays stable on loaded
+     machines. The same bounded-return pattern guards the sibling-cancellation and
+     panic-containment tests, each wrapping <code>Run</code> in a helper goroutine with a
+     5-second timeout so the test suite fails with a message instead of hanging CI.</p>
+
+  <h3>Ordering proofs via observable side effects</h3>
+  <pre><code>mustAdd(t, g, &amp;<span class="typ">Task</span>{ID: <span class="str">"b"</span>, Deps: []<span class="typ">string</span>{<span class="str">"a"</span>}, Run: <span class="kw">func</span>(ctx context.<span class="typ">Context</span>) (<span class="kw">any</span>, <span class="typ">error</span>) {
+    <span class="kw">if</span> _, ok := st.<span class="fn">get</span>(<span class="str">"a"</span>); !ok {
+        <span class="kw">return nil</span>, errors.<span class="fn">New</span>(<span class="str">"b ran before a published"</span>)
+    }
+    ...</code></pre>
+  <p>You cannot assert "b ran after a" by inspecting the final result — both orders produce the
+     same output values. Instead the tests plant a mutex-guarded shared store that each task
+     writes and each dependent reads: if a dependent ever starts before its dependency
+     published, the probe fails the run from the inside. The negative variant goes further:
+     with the dependency deliberately blocked, the test confirms Run hasn't completed after
+     100 ms (consumer didn't sneak past the gate), then releases and joins. This technique —
+     encoding ordering constraints as runtime-checkable probes inside task bodies — turns a
+     property you care about into something the suite can catch nondeterministically-but-
+     reliably, especially under repeated runs and the race detector.</p>
+
+  <h3>-race discipline — the detector as a required gate</h3>
+  <div class="callout">
+    <p><strong>The rule:</strong> for this project, <code>go test</code> passing is necessary
+       but not sufficient. <code>go test -race ./solution/...</code> is the real gate — the
+       results map's safety depends on a happens-before edge (dispatcher exit ↔
+       <code>eg.Wait()</code> return) that only the detector can verify dynamically.</p>
+  </div>
+  <p>Every concurrency claim in this doc is backed by the detector: single-owner scheduling
+     state, the post-Wait results read, double-<code>Run</code> independence, and eight-way
+     concurrent <code>Run</code> calls on one graph were all exercised under
+     <code>-race -count=2</code> during review. The detector finds races only on executions
+     that actually interleave badly, so the stress test (200 tasks, atomic CAS-tracked max
+     concurrency) doubles as interleaving pressure — high contention widens the space of
+     schedules the detector samples. Treat <code>-race</code> clean as a property you re-prove
+     per change, not a one-time certificate.</p>
+
+  <h3>Regression tests born from adversarial review</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">TestAddNilRunRejected</span>(t *testing.T) {
+    ...
+    <span class="kw">if</span> !strings.<span class="fn">Contains</span>(err.<span class="fn">Error</span>(), <span class="str">"nil Run"</span>) { ... }
+    <span class="kw">if</span> !strings.<span class="fn">Contains</span>(err.<span class="fn">Error</span>(), <span class="str">"norun"</span>) { ... }
+}
+
+<span class="kw">func</span> <span class="fn">TestTaskPanicBecomesWrappedError</span>(t *testing.T) {
+    ... <span class="com">// panic("boom") must yield an error naming "panicky" AND "boom"</span>
+}</code></pre>
+  <p>Two of the sharpest tests exist because review agents broke the implementation on purpose.
+     <code>TestAddNilRunRejected</code> pins the fix for a finding where a nil <code>Run</code>
+     func sailed past <code>Add</code> and crashed the process at dispatch — the test demands
+     rejection with a message naming both the defect ("nil Run") and the offending ID.
+     <code>TestTaskPanicBecomesWrappedError</code> pins the panic-containment contract: a
+     panicking body must become a wrapped error carrying the task ID and panic value, dependents
+     must not run, <code>Results</code> must be nil, and <code>Run</code> must return within its
+     bounded window. Similarly, <code>TestCycleErrorQuotesIDs</code> plants a newline-bearing
+     hostile ID and asserts the rendered error contains no raw newline. These are regression
+     tests in the truest sense: executable memories of ways the code was actually broken, so
+     those specific wounds can't silently reopen.</p>
+
+  <h3>Determinism and completeness sweeps</h3>
+  <p>The remaining suites round out the contract. <code>TestUnknownDepDeterministicOffender</code>
+     runs <code>Validate</code> twenty times on a graph with multiple offenders and requires the
+     lowest-ID one every iteration — flushing out map-order leakage that a single run would
+     hide. <code>TestValidateCycleNamesMembers</code> and <code>TestSelfCycle</code> cover the
+     DFS across three-node rings and self-loops. <code>TestWideParallelOrderIndependent</code>
+     verifies fifty independent tasks' results by ID regardless of completion order, while
+     <code>TestConcurrencyStress</code> tracks peak simultaneous tasks with atomics and fails
+     if observed parallelism drops below two — proving the pool genuinely overlaps work rather
+     than accidentally serializing. <code>TestGetTypedRetrieval</code> sweeps every failure mode
+     of the generic accessor, including nil receivers. Each is one sentence of contract,
+     executable.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>DAG orchestration over Go's concurrency primitives powers some of the largest workflow
+       systems in industry — you've now built their in-memory core:</p>
+    <ul>
+      <li><strong>Temporal</strong> — the durable-workflow platform (successor to Uber's Cadence,
+          both written substantially in Go). Its SDK executes your workflow functions as
+          deterministically-replayed task graphs with exactly the concerns pipeline teaches —
+          dependency ordering, cancellation propagation, failure isolation — plus persistence
+          and replay across process restarts. Its client-facing Go APIs lean on the same
+          context-and-error-wrapping idioms you implemented.</li>
+      <li><strong>Argo Workflows</strong> — the Kubernetes-native workflow engine, written in
+          Go, that runs millions of CI/CD and batch pipelines. Its core abstraction is precisely
+          a DAG of steps with fan-out/fan-in, retry policies, and dependency-driven scheduling —
+          pipeline's diamond and wide-graph shapes are Argo's daily bread, scaled up and made
+          durable via CRDs.</li>
+      <li><strong>Airflow-alternatives in the Go ecosystem</strong> — teams escaping Python's
+          Airflow increasingly reach for Go-native schedulers (e.g., Dagu-style single-binary
+          DAG runners, and Luigi/Prefect-style orchestration reimplemented atop Go services).
+          Their common architecture — parse the DAG, validate acyclicity, schedule ready nodes,
+          propagate failures — mirrors pipeline's Validate-then-dispatch structure almost
+          line-for-line.</li>
+      <li><strong>Build systems and CI schedulers</strong> — Bazel-style remote execution
+          frontends and Go's own build cache treat compilation units as a dependency graph
+          scheduled onto bounded worker pools. The in-degree-countdown scheduling you wrote is
+          the same algorithm, and the same saturation-deadlock hazards apply to their task
+          dispatchers.</li>
+    </ul>
+  </div>
+
+  <h3>Why errgroup became the ecosystem's default</h3>
+  <ol>
+    <li><strong>It makes goroutine lifetime lexical.</strong> Before errgroup, every concurrent
+        operation needed bespoke bookkeeping — a WaitGroup here, an error channel there, a done
+        channel for early exit, and a comment begging future maintainers not to miss a return
+        path. errgroup collapses all four into one type whose <code>Wait</code> is the single
+        join point. Docker, etcd, Kubernetes controllers, and CockroachDB all adopted it for
+        exactly this reason: leaked-goroutine bugs stopped being a review category and became a
+        structural impossibility.</li>
+    <li><strong>First-error-wins with automatic cancellation matches how failures actually
+        cascade.</strong> In distributed systems, when one shard fails, continuing its siblings
+        usually wastes work or produces inconsistent partial output. errgroup's derived context
+        encodes the policy "first failure stops the world" in five lines of library code — and
+        pipeline shows how to extend that policy inward, so cancellation reaches not just
+        sibling goroutines but the scheduler coordinating them.</li>
+    <li><strong>Its known gaps teach as much as its features.</strong> errgroup neither bounds
+        concurrency nor recovers panics — deliberate scope choices that push you to the
+        patterns production code needs: fixed worker pools over unbounded <code>Go</code> calls,
+        and explicit recover wrappers around third-party callbacks. Every serious user of
+        errgroup eventually writes both; you did, on purpose, with tests.</li>
+  </ol>
+  <p>The through-line: a DAG orchestrator is not exotic technology — it is a dispatcher that
+     owns a ready queue, a bounded pool that executes, and a context threading cancellation
+     through every blocking point. Master those three moving parts here, and Temporal's
+     documentation, Argo's DAG spec, or any scheduler codebase you open next will read as
+     variations on a theme you've already implemented, raced, deadlock-tested, and reviewed.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="11-tagforge.html">&larr; Previous: tagforge</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 12 of 16</span>
+  <a class="btn" href="13-perfhunt.html">Next: perfhunt &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
