@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>document.documentElement.classList.add('js');</script>
 <title>Go101 · Project 02 — taskline</title>
 <style>
   :root {
@@ -178,17 +179,21 @@
   /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
   @media (prefers-reduced-motion: no-preference) {
 
-    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible) */
-    .reveal {
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
       opacity: 0;
       transform: translateY(24px);
-      transition: opacity 600ms ease-out, transform 600ms ease-out;
     }
     .reveal.visible {
       opacity: 1;
       transform: translateY(0);
     }
-    .reveal:nth-of-type(odd) { transition-delay: 40ms; }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
 
     /* Subtle gradient pulse on the header tier badge */
     @keyframes badge-pulse {
@@ -219,6 +224,12 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
     * { transition: none !important; animation: none !important; }
   }
 </style>
@@ -247,8 +258,8 @@
   <h2><span class="sec-num">01</span>Stack Evaluation</h2>
   <h3>The stack: pure standard library, again</h3>
   <p>taskline uses three load-bearing stdlib packages — <code>encoding/json</code>, <code>time</code>,
-     and <code>os</code> — plus small helpers (<code>errors</code>, <code>fmt</code>,
-     <code>path/filepath</code>). No database driver, no storage engine, no CLI framework,
+     and <code>os</code> — plus small helpers (<code>bytes</code>, <code>errors</code>,
+     <code>fmt</code>, <code>io/fs</code>, <code>path/filepath</code>). No database driver, no storage engine, no CLI framework,
      no <code>go.sum</code>. Where project 01 proved you can build a real tool with nothing
      imported, project 02 proves something harder to believe until you've done it:
      <strong>persistent state doesn't require a database</strong>.</p>
@@ -272,7 +283,7 @@
         The engine would dominate the codebase and drown the actual teaching content. When a later
         project needs indexed or concurrent access, one of these returns and its value will be obvious.</li>
     <li><strong>Third-party CLI frameworks (cobra et al.)</strong> — taskline's five subcommands are
-        a plain <code>switch</code> over <code>os.Args[1]</code>: ~30 lines, fully transparent.
+        a plain <code>switch</code> over <code>os.Args[1]</code>: ~46 lines, fully transparent.
         A framework would add a dependency tree to hide logic this small.</li>
     <li><strong>An append-only log file</strong> — writing one line per mutation avoids full rewrites
         but introduces replay/recovery/compaction concerns: exactly the complexity budget this
@@ -286,7 +297,7 @@
         writing any reflection yourself.</li>
     <li><strong>Atomic file writes.</strong> The temp-file-then-rename dance is the same pattern
         databases, editors, and package managers use under different names. Learning it on a
-        40-line <code>save()</code> makes the idea permanent.</li>
+        31-line <code>save()</code> makes the idea permanent.</li>
     <li><strong>The zero-dependency philosophy.</strong> A single static binary storing its data in
         one human-readable file is a legitimate production design for countless tools — not just a
         teaching simplification. Knowing when the stdlib suffices is itself an engineering skill.</li>
@@ -306,9 +317,13 @@
         non-zero, monotonically non-decreasing <code>CreatedAt</code>, and leaves
         <code>DoneAt</code> nil. Unicode titles like <code>"fika ☕ med kanelbulle"</code> work unchanged.</li>
     <li><strong>R2 — List reflects stored tasks.</strong> After adding N tasks,
-        <code>List()</code> returns N tasks whose IDs, titles, statuses, and
-        <code>CreatedAt</code> values match what was added (comparing times with
-        <code>Equal</code>, since time equality isn't simple field comparison).</li>
+        <code>List()</code> returns N tasks whose IDs, titles, and statuses match what was
+        added. One honesty note about how the roundtrip test checks this: it builds its
+        expectation from each returned task itself (<code>CreatedAt:&nbsp;g.CreatedAt</code>
+        copied into the wanted value), so CreatedAt rides along unchanged rather than being
+        independently compared there — a test that tampered with timestamps would still pass
+        it. Exact timestamp survival through save/load is pinned separately by
+        <code>TestPersistenceAcrossReopen</code> (see Section 5).</li>
     <li><strong>R3 — Missing store reads as empty, not error.</strong> A never-written file yields
         an empty, <em>non-nil</em> slice from <code>List()</code> — so callers can range over it
         safely. Same for an existing-but-empty file.</li>
@@ -334,10 +349,15 @@
         The atomic-rename test verifies the file still parses after mutation.</li>
     <li><strong>NF2 — Errors wrap, don't erase.</strong> Domain sentinels (<code>ErrNotFound</code>)
         and I/O failures travel up the call chain wrapped with context, checkable via
-        <code>errors.Is</code> at the boundary where the CLI turns them into messages and exit codes.</li>
+        <code>errors.Is</code> at the boundary where the CLI turns them into messages and exit
+        codes. The tradeoff: wrapped context embeds full paths and fragments of file content —
+        helpful at an interactive terminal, but error chains headed for aggregated logs deserve
+        filtering before they get there.</li>
     <li><strong>NF3 — Human-inspectable format.</strong> The store is indented JSON
         (<code>MarshalIndent</code>) — openable, diffable, and editable by hand, which matters more
-        than compact bytes at this scale.</li>
+        than compact bytes at this scale. One caveat: every save writes through a temp file created
+        with mode 0600 and renames it over the target, so a hand edit that chmods the store is
+        silently reverted to 0600 on the next write.</li>
   </ul>
 </section>
 
@@ -386,7 +406,7 @@
 
   <h3>D3: Temp file + rename = atomicity</h3>
   <pre><code>tmp, err := os.<span class="fn">CreateTemp</span>(filepath.<span class="fn">Dir</span>(s.path), <span class="str">".taskline-*.tmp"</span>)
-<span class="com">// ...write, Sync, Close...</code>
+<span class="com">// ...write, Sync, Close...</span>
 <span class="kw">if</span> err := os.<span class="fn">Rename</span>(name, s.path); err != <span class="kw">nil</span> {
     os.<span class="fn">Remove</span>(name)
     <span class="kw">return</span> fmt.<span class="fn">Errorf</span>(<span class="str">"rename over %s: %w"</span>, s.path, err)
@@ -397,8 +417,10 @@
      filesystem), flush it with <code>Sync</code>, close it, then <code>os.Rename</code> it over
      the target. Rename is atomic at the OS level: readers see either the old inode or the new
      one, never a hybrid. Every failure path cleans up the abandoned temp file. This is the same
-     guarantee editors implement when they save your file, and the seed of what databases call
-     a commit.</p>
+      guarantee editors implement when they save your file, and the seed of what databases call
+      a commit. One deliberate omission: Sync covers only the temp file's data — no directory
+      sync follows the rename — so across actual power loss (as opposed to mere process death)
+      an acknowledged update can revert.</p>
 
   <h3>D4: IDs are max(existing)+1 — and what that implies</h3>
   <pre><code>max := <span class="num">0</span>
@@ -422,29 +444,44 @@ task := <span class="typ">Task</span>{ID: max + <span class="num">1</span>, <spa
 } <span class="kw">else</span> {
     tasks[i].DoneAt = <span class="kw">nil</span>
 }</code></pre>
-  <p><code>DoneAt</code> is a derived fact, not independent state: it's set exactly when a task
-     transitions to <code>done</code> and cleared on <em>any</em> other status. Letting them drift
+  <p><code>DoneAt</code> is a derived fact, not independent state: SetStatus assigns it whenever
+     the new status is <code>done</code> — transition or not, so a redundant <code>do</code> on an
+     already-done task refreshes the timestamp rather than preserving it — and clears it on
+     <em>any</em> other status. Letting them drift
      — a task marked <code>doing</code> still carrying a completion timestamp — would poison every
      report built on the data, so SetStatus enforces the invariant on every write rather than
      hoping callers remember. Two details worth studying: <code>DoneAt</code> is a
      <code>*time.Time</code> because Go has no tri-state bool — nil is the only way to say
      "never"; and <code>now</code> is captured in a local before taking its address, because
-     <code>&amp;time.Now()</code> won't compile (you can't take the address of a return value).
-     <code>TestDoneAtLifecycle</code> walks the full todo → done → doing arc to lock the rule in.</p>
+      <code>&amp;time.Now()</code> won't compile (you can't take the address of a return value).
+      <code>TestDoneAtLifecycle</code> walks the full todo → done → doing arc to lock the rule in.
+      Related CLI honesty: subcommand dispatch reads only the one argument each command needs
+      (<code>os.Args[2]</code>), so extra trailing arguments are silently ignored.</p>
 
   <h3>D6: Library core, thin command shell</h3>
   <pre><code>projects/02-taskline/
-├── taskline.go             <span class="com"># package taskline — stubs you implement</span>
-├── taskline_test.go        <span class="com"># the executable spec</span>
+├── go.mod                      <span class="com"># module go101.dev/projects/02-taskline</span>
+├── taskline.go                 <span class="com"># package taskline — stubs you implement</span>
+├── taskline_test.go            <span class="com"># the executable spec</span>
+├── cmd/taskline/main.go        <span class="com"># your CLI entry point</span>
 └── solution/
-    ├── solution.go         <span class="com"># package solution — Task, Store, ErrNotFound</span>
-    └── cmd/taskline/main.go   <span class="com"># subcommand wiring</span></code></pre>
+    ├── solution.go             <span class="com"># package solution — Task, Store, ErrNotFound</span>
+    ├── taskline_test.go        <span class="com"># the same suite, mirrored against the reference</span>
+    └── cmd/taskline/main.go    <span class="com"># subcommand wiring (reference)</span></code></pre>
   <p>All persistence logic lives in the library package; <code>main</code> only dispatches
      subcommands (<code>add/list/do/start/rm</code>), formats columns, maps
      <code>errors.Is(err, ErrNotFound)</code> to friendly stderr output, and picks the store path
      from <code>TASKLINE_FILE</code> (defaulting to <code>~/.taskline.json</code>). The split keeps
      the interesting code process-free and unit-testable — the same library-plus-cmd layout as
      project 01, now carrying state.</p>
+  <div class="callout">
+    <p><strong>A note on output safety:</strong> titles are stored raw and printed
+    byte-for-byte — the column formatting pads fields but never sanitizes them — so a title
+    containing ANSI escape sequences or embedded newlines passes straight through to the
+    terminal. This is the same escape-passthrough class the wc-family of tools exposes when
+    echoing operand text; production CLIs like <code>gh</code> and Docker escape control
+    characters before writing to a terminal.</p>
+  </div>
 </section>
 
 <!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
@@ -512,8 +549,11 @@ DoneAt    *<span class="typ">time.Time</span> `json:<span class="str">"done_at,o
      unconditionally, and the test suite enforces non-nil explicitly.</p>
 
   <h3>time.Time marshals itself</h3>
-  <pre><code><span class="kw">if</span> got[<span class="num">0</span>].ID != first.ID || !got[<span class="num">0</span>].CreatedAt.<span class="fn">Equal</span>(first.CreatedAt) { <span class="com">// .Equal, not ==</span></code></pre>
-  <p><code>time.Time</code> implements <code>json.Marshaler</code>: it serializes to RFC 3339 —
+  <pre><code><span class="kw">if</span> got[<span class="num">0</span>].ID != first.ID || got[<span class="num">0</span>].Title != first.Title || !got[<span class="num">0</span>].CreatedAt.<span class="fn">Equal</span>(first.CreatedAt) {
+    t.<span class="fn">Errorf</span>(<span class="str">"after reopen got[0] = %+v, want %+v"</span>, got[0], first)
+}</code></pre>
+  <p>Note the comparison goes through <code>.Equal</code>, not <code>==</code>.
+     <code>time.Time</code> implements <code>json.Marshaler</code>: it serializes to RFC 3339 —
      <code>"2026-08-25T14:03:00.123456789+02:00"</code> — and unmarshals back losslessly,
      including timezone. That's why <code>TestPersistenceAcrossReopen</code> can assert an exact
      timestamp match after a save/load cycle with zero custom code: the round-trip is handled by
@@ -532,8 +572,10 @@ os.<span class="fn">Rename</span>(name, s.path)                            <span
      file with exclusive-create semantics, so no collision or symlink attack window exists, and
      the <code>*</code> in the pattern becomes random characters. <code>Sync</code> matters because
      <code>Write</code> reaching the OS buffer isn't durability — Sync forces the data to stable
-     storage before rename publishes it, so the renamed file is never empty-on-disk. Rename itself
-     replaces the destination atomically on POSIX and Windows alike. The choreography — create,
+      storage before rename publishes it, so the renamed file is never empty-on-disk. Rename
+      itself replaces the destination atomically on POSIX systems; Go's <code>os.Rename</code>
+      emulates reasonable semantics on Windows, but the guarantee this walkthrough leans on is
+      POSIX-focused. The choreography — create,
      write, sync, close, rename, remove-on-any-error — is worth memorizing; it recurs whenever Go
      code must update a file without ever exposing a torn version.</p>
 
@@ -569,7 +611,7 @@ os.<span class="fn">Rename</span>(name, s.path)                            <span
   <pre><code>reopened, err := <span class="fn">OpenStore</span>(path)
 got, err := reopened.<span class="fn">List</span>()
 
-<span class="kw">if</span> got[<span class="num">0</span>].ID != first.ID || !got[<span class="num">0</span>].CreatedAt.<span class="fn">Equal</span>(first.CreatedAt) {
+<span class="kw">if</span> got[<span class="num">0</span>].ID != first.ID || got[<span class="num">0</span>].Title != first.Title || !got[<span class="num">0</span>].CreatedAt.<span class="fn">Equal</span>(first.CreatedAt) {
     t.<span class="fn">Errorf</span>(<span class="str">"after reopen got[0] = %+v, want %+v"</span>, got[0], first)
 }</code></pre>
   <p>Why reopen instead of calling <code>List()</code> on the original store? Because a broken
@@ -660,8 +702,8 @@ got, err := reopened.<span class="fn">List</span>()
   </ol>
   <p>The through-line: structs-with-tags, atomic writes, and sentinel errors aren't toy-project
      techniques. They're the daily vocabulary of every Go service talking to a cloud API and
-     every tool keeping state on your laptop — and this project exercises all three in under
-     200 lines.</p>
+     every tool keeping state on your laptop — and this project exercises all three in ~195
+     lines.</p>
 </section>
 
 </main>
