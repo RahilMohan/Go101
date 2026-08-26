@@ -308,8 +308,8 @@
         a complete miniature of real-world input handling.</li>
     <li><strong>Precompilation as the escape hatch from reflection's cost.</strong> Reflection
         re-does structural work every call; a compiled schema does it once. The measured gap —
-        roughly <strong>15–25×</strong> depending on machine and config shape (on one M1 Pro
-        laptop: ~3,300 ns/op naive vs ~170 ns/op compiled on a six-field nested config) — is not
+        on one M1 Pro laptop, <strong>~13×</strong> (~2,700 ns/op naive vs ~200 ns/op compiled
+        on a six-field nested config, after the safety machinery described below) — is not
         an implementation detail. It is <em>the</em> argument behind every schema-building API
         you'll ever meet, from JSON decoders to protobuf, measured here with your own
         benchmarks.</li>
@@ -362,6 +362,17 @@
         cannot meaningfully read-check them, so promising to would lie.</li>
     <li><strong>R10 — The parser survives arbitrary input.</strong> Under fuzzing,
         <code>parseTag</code> never panics, and an error result always implies nil constraints.</li>
+    <li><strong>R11 — Recursive struct types are rejected at build time.</strong> Self- or
+        mutually-referential types (through any chain of pointer/nested/collection hops) make
+        <code>BuildSchema</code> — and the naive <code>Validate</code> — fail with a
+        <code>recursive type ... not supported</code> error naming the type, instead of hanging.
+        Cycle detection is path-scoped: diamond-shaped reuse of one type at several depths
+        remains perfectly legal.</li>
+    <li><strong>R12 — Struct elements of slices/maps/arrays are validated recursively.</strong>
+        Violations inside elements carry indexed paths (<code>Items[1].Code</code>,
+        <code>ByID[k].Code</code>, <code>Ptrs[0].Code</code>). Nil pointer elements skip
+        silently, exactly like optional fields. Scalar collections (e.g. <code>[]string</code>)
+        remain length-only.</li>
   </ul>
 
   <h3>Non-functional</h3>
@@ -388,7 +399,7 @@
   <h3>D1: Two phases — parse-once plans vs parse-per-call</h3>
   <pre><code><span class="kw">func</span> <span class="fn">Validate</span>(v <span class="kw">any</span>) <span class="typ">error</span> {
     ...
-    sp, err := <span class="fn">buildStructPlan</span>(rv.<span class="fn">Type</span>(), <span class="str">""</span>)  <span class="com">// rebuilt EVERY call</span>
+    sp, err := <span class="fn">buildStructPlan</span>(rv.<span class="fn">Type</span>(), <span class="str">""</span>, <span class="kw">nil</span>)  <span class="com">// rebuilt EVERY call</span>
     ...
 }
 
@@ -407,20 +418,25 @@
 
   <h3>D2: The compiled plan — index chains, not field names</h3>
   <pre><code><span class="kw">type</span> <span class="typ">fieldPlan</span> <span class="kw">struct</span> {
-    idx    []int       <span class="com">// index chain from the root struct value</span>
-    path   string      <span class="com">// dotted path used in error messages</span>
-    c      constraints <span class="com">// parsed tag — numbers already converted</span>
-    isPtr  bool        <span class="com">// final hop is a pointer</span>
-    nested *structPlan <span class="com">// non-nil when the effective field type is a struct</span>
+    idx         []int       <span class="com">// index chain from the root struct value</span>
+    path        string      <span class="com">// dotted path used in error messages</span>
+    childPrefix string      <span class="com">// path prefix handed to nested plans ("path." / "")</span>
+    c           constraints <span class="com">// parsed tag — numbers already converted</span>
+    isPtr       bool        <span class="com">// final hop is a pointer</span>
+    nested      *structPlan <span class="com">// non-nil when the effective field type is a struct</span>
+    elems       *structPlan <span class="com">// non-nil for slice/map/array fields whose elements are structs</span>
 }</code></pre>
   <p>A plan entry records <em>where</em> to find the field (a chain of indices, so promoted
      embedded fields address as <code>[]int{embedIdx, fieldIdx}</code>), <em>what</em> to check
      (constraints with parsing already done — <code>oneof</code> split into a slice, min/max held
-     as float64), and <em>where to recurse</em>. At run time there is zero string work: no
-     <code>Tag.Get</code>, no <code>Splits</code>, no <code>ParseFloat</code> — just
-     <code>walk(sv, fp.idx)</code> followed by typed reads. The dotted path is computed at build
-     time too, so even error construction avoids re-deriving names. This shape is deliberately
-     boring: a flat slice of self-contained instructions that <code>range</code> can burn through.</p>
+     as float64), and <em>where to recurse</em>: into a named nested struct (<code>nested</code>)
+     or into the struct-typed <em>elements</em> of a collection (<code>elems</code>). At run time
+     there is near-zero string work: no <code>Tag.Get</code>, no <code>Splits</code>, no
+     <code>ParseFloat</code> — just <code>walk(sv, fp.idx)</code> followed by typed reads. The
+     build-time paths are compiled prefix-free and used as-is at the root; only collection
+     elements, whose indices/keys exist only at runtime, pay per-call string building for paths
+     like <code>Items[1]</code>. This shape is deliberately boring: a flat slice of
+     self-contained instructions that <code>range</code> can burn through.</p>
 
   <h3>D3: Fail-closed applicability, checked per constraint family</h3>
   <pre><code><span class="kw">if</span> c.minSet &amp;&amp; !<span class="fn">numericKind</span>(t.<span class="fn">Kind</span>()) &amp;&amp; !<span class="fn">lengthKind</span>(t.<span class="fn">Kind</span>()) {
@@ -458,7 +474,7 @@
   <pre><code><span class="kw">if</span> ft.<span class="fn">Kind</span>() == reflect.<span class="typ">Struct</span> &amp;&amp; f.Anonymous {
     <span class="com">// Embedded structs promote even when the embedded type name</span>
     <span class="com">// is unexported: reading its exported fields is legal.</span>
-    sub, err := <span class="fn">buildStructPlan</span>(ft, prefix)
+    sub, err := <span class="fn">buildStructPlan</span>(ft, prefix, stack)
     <span class="kw">for</span> j := <span class="kw">range</span> sub.fields {
         promoted := sub.fields[j]
         promoted.idx = <span class="fn">append</span>([]<span class="typ">int</span>{i}, promoted.idx...)
@@ -492,8 +508,63 @@
      <code>i</code>, <code>_</code>) and then double-checks the parsed result isn't NaN/Inf. One
      subtle win: banning <code>x/n/i/_</code> also keeps overflow forms like <code>1e309</code>
      out via the explicit NaN/Inf check on the result — ParseFloat returns ±Inf on overflow,
-     which the second guard catches. Whitelist-first wrapping is the cheap way to make a
-     permissive parser strict without owning its grammar.</p>
+      which the second guard catches. Whitelist-first wrapping is the cheap way to make a
+      permissive parser strict without owning its grammar.</p>
+
+  <h3>D7: Recursive types are rejected at build time — path-scoped cycle detection</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">buildStructPlan</span>(t reflect.<span class="typ">Type</span>, prefix <span class="kw">string</span>, stack []reflect.<span class="typ">Type</span>) (*<span class="typ">structPlan</span>, <span class="typ">error</span>) {
+    <span class="com">// Cycle detection tracks the CURRENT PATH's types, not a global</span>
+    <span class="com">// visited-set: one type may legitimately appear at several depths</span>
+    <span class="com">// via different paths (diamonds), but a type appearing twice on one</span>
+    <span class="com">// path means infinite recursion ahead.</span>
+    <span class="kw">for</span> _, st := <span class="kw">range</span> stack {
+        <span class="kw">if</span> st == t {
+            <span class="kw">return</span> <span class="kw">nil</span>, fmt.<span class="fn">Errorf</span>(<span class="str">"%srecursive type %s not supported"</span>, prefix, t)
+        }
+    }
+    stack = <span class="fn">append</span>(stack, t)
+    ...</code></pre>
+  <p>A self-referential type like a linked-list node (<code>Next *listNode</code>) or a mutual
+     pair (<code>cycA</code> holds <code>*cycB</code>, which holds <code>*cycA</code>) would make
+     any recursive planner loop forever — and since <code>Validate</code> builds its plan per
+     call, the naive path would hang too, not just <code>BuildSchema</code>. The fix is to detect
+     this at build time and fail with an error naming the offending type. The design choice worth
+     internalizing is <strong>what counts as a cycle</strong>: the check carries a <em>path
+     stack</em> of types currently being planned, not a global visited set. A type appearing twice
+     on one path is genuine recursion; the same type reached via two different paths (a diamond:
+     root holds <code>sharedLeaf</code> directly <em>and</em> through
+     <code>branchOne.L</code>) is ordinary type reuse that must stay legal. A global set would
+     reject perfectly healthy shapes; a per-path stack rejects exactly the ones whose plans can't
+     terminate. As defense-in-depth, execution also carries a <code>maxDepth = 64</code> guard —
+     plans are acyclic by construction, so it exists for pathological data, not correctness.</p>
+
+  <h3>D8: Collection elements are validated — with runtime-only paths</h3>
+  <pre><code><span class="kw">switch</span> ft.<span class="fn">Kind</span>() {
+<span class="kw">case</span> reflect.<span class="typ">Slice</span>, reflect.<span class="typ">Array</span>, reflect.<span class="typ">Map</span>:
+    et := ft.<span class="fn">Elem</span>()
+    <span class="kw">if</span> et.<span class="fn">Kind</span>() == reflect.<span class="typ">Ptr</span> {
+        et = et.<span class="fn">Elem</span>()          <span class="com">// []*collItem plans like []collItem</span>
+    }
+    <span class="kw">if</span> et.<span class="fn">Kind</span>() == reflect.<span class="typ">Struct</span> {
+        ep, eerr := <span class="fn">buildStructPlan</span>(et, <span class="str">""</span>, stack)
+        ...
+        fp.elems = ep
+    }
+}</code></pre>
+  <p>The first version of tagforge checked collections by length only — which meant a broken
+     element inside <code>[]collItem</code> sailed through while the slice header looked fine.
+     Now a collection field whose element type (after one pointer hop) is a struct gets a compiled
+     element plan, and execution recurses into every present element. Two precision points.
+     First, <strong>paths are inherently runtime data</strong>: <code>Items[1].Code</code> and
+     <code>ByID[k].Code</code> contain indices and map keys that don't exist at build time, so
+     element validation is the one place the executor pays string building — via a dynamic
+     prefix handed to <code>runAt</code>. Root-level plans stay prefix-free and allocation-free;
+     only elements pay. Second, <strong>nil pointer elements skip silently</strong>
+     (<code>Ptrs[1] == nil</code> is fine), exactly matching the optional-nil-pointer semantics of
+     R4/D4 — consistency between "absent value behind a pointer" rules matters more than any
+     individual rule. Scalar collections (<code>[]string</code>,
+     <code>map[string]int</code>) remain length-only: there is no tag grammar for scalar
+     elements, and inventing one silently would violate fail-closed.</p>
 </section>
 
 <!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
@@ -543,21 +614,25 @@ tag := f.Tag.<span class="fn">Get</span>(<span class="str">"validate"</span>)   
      someone's parser, exactly like the ~20-line one you wrote here.</p>
 
   <h3>Why precompilation wins — measuring the gap honestly</h3>
-  <pre><code>BenchmarkValidateReflect    ~3,300 ns/op    <span class="com">// reflect walk + tag parse, every call</span>
-BenchmarkValidateSchema       ~170 ns/op    <span class="com">// reflect walk only — plan reused</span>
-BenchmarkBuildSchema        ~6,600 ns/op    <span class="com">// the one-time price, priced separately</span></code></pre>
+  <pre><code>BenchmarkValidateReflect    ~2,700 ns/op    <span class="com">// reflect walk + tag parse, every call</span>
+BenchmarkValidateSchema       ~200 ns/op    <span class="com">// reflect walk only — plan reused</span>
+BenchmarkBuildSchema        ~3,000 ns/op    <span class="com">// the one-time price, priced separately</span></code></pre>
   <p>On a six-field config with a nested struct, the compiled path runs roughly
-     <strong>15–25× faster</strong> (numbers above from an M1 Pro; your machine will differ, the
-     ratio's order of magnitude won't). Where does the time go in the slow path?
+     <strong>13× faster</strong> (numbers above from an M1 Pro; your machine will differ, and so
+     will the ratio's precise value — its order of magnitude won't). Note honestly that this gap
+     is narrower than a purely naive plan would show: the executor now carries safety machinery
+     (path-scoped cycle detection at build time, dynamic element paths for collections), and that
+     machinery taxes both sides. Where does the remaining time go in the slow path?
      <code>buildStructPlan</code> re-does everything structural per call: <code>NumField</code>
-     iterations, <code>Tag.Get</code> string lookups, <code>strings.Cut/Split</code> allocation,
-     <code>ParseFloat</code> conversions, applicability checks — work whose answer cannot change
-     between calls because it depends only on the type. The compiled path reduces each call to
-     index-chain hops and arithmetic. Crucially, <code>BuildSchema</code> has its own benchmark:
-     at ~6,600 ns/op it costs about twenty schema-path validations, so the break-even is around
-     twenty validations of this type — trivially reached by any server, pointless for a
-     validate-once-at-startup config. That third number is what turns "precompile everything"
-     dogma into an engineering decision you can actually compute.</p>
+     iterations, cycle-stack scans, <code>Tag.Get</code> string lookups,
+     <code>strings.Cut/Split</code> allocation, <code>ParseFloat</code> conversions, applicability
+     checks — work whose answer cannot change between calls because it depends only on the type.
+     The compiled path reduces each call to index-chain hops and arithmetic. Crucially,
+     <code>BuildSchema</code> has its own benchmark: at ~3,000 ns/op it costs about a
+     dozen-plus compiled-path validations, so precompiling pays for itself almost immediately in
+     any hot loop — while for a validate-once-at-startup config the naive path remains perfectly
+     reasonable. That third number is what turns "precompile everything" dogma into an
+     engineering decision you can actually compute.</p>
 
   <h3>Numeric edge cases — unsigned branches and precision honesty</h3>
   <pre><code><span class="kw">switch</span> fv.<span class="fn">Kind</span>() {
@@ -587,7 +662,7 @@ BenchmarkBuildSchema        ~6,600 ns/op    <span class="com">// the one-time pr
        debuggable with ordinary tools.</p>
   </div>
   <p>Three honest boundaries for this stack. <strong>Hot paths:</strong> even the compiled schema
-     pays reflect-based field access per call (~170 ns/op here); a serializer pushing millions of
+     pays reflect-based field access per call (~200 ns/op here); a serializer pushing millions of
      values per second wants codegen or manual marshaling, which is why <code>encoding/json</code>
      offers <code>Marshaler</code> hooks and protobuf generates code. <strong>Public APIs where
      generics suffice:</strong> a function that needs to compare or copy values of one shape
@@ -650,6 +725,21 @@ err = sc.<span class="fn">Validate</span>(tt.val)
      structured result out, one invariant — exactly the shape worth fuzzing first in any
      codebase.</p>
 
+  <h3>Recursion and collection tests — termination and reachability</h3>
+  <p>Two suites pin the newer semantics. <code>TestRecursiveTypesRejected</code> asserts that a
+     self-referential type (<code>listNode</code>) and a mutual pair (<code>cycA</code>/
+     <code>cycB</code>) both fail <em>at build time</em> with an error containing
+     <code>"recursive type"</code> — through <code>BuildSchema</code> <em>and</em> through naive
+     <code>Validate</code>, because a hang in either path is the bug being prevented. The same
+     test then builds a diamond (<code>diamondRoot</code> reaching <code>sharedLeaf</code> by two
+     routes) and demands it builds, validates, and reports a deep violation at exactly
+     <code>R.L.N</code> — proving cycle detection is path-scoped, not global.
+     <code>TestCollectionElementsValidated</code> plants violations inside a slice element
+     (<code>Items[1].Code</code>), a map value (<code>ByID[k].Code</code>), and a pointer element
+     (<code>Ptrs[0].Code</code>) while keeping a nil pointer element legal
+     (<code>Ptrs[1] = nil</code>), then runs the whole thing through both engines and finishes by
+     confirming scalar collections still validate length-only.</p>
+
   <h3>Benchmark methodology — the honesty note</h3>
   <div class="callout">
     <p><strong>The note:</strong> both benchmarks validate the <em>same value</em> through the
@@ -673,10 +763,12 @@ err = sc.<span class="fn">Validate</span>(tt.val)
      <code>TestNestedAndEmbeddedPaths</code> asserts promotion positively (<code>ID</code>
      appears) and negatively (<code>embBase.ID</code> must <em>not</em>);
      <code>TestPointerHandling</code> walks all four nil/non-nil × required/optional corners;
-     <code>TestSchemaReuse</code> interleaves failing, passing, and failing values through one
-     schema to prove no state leaks, then feeds a mismatched type to prove the type check;
-     <code>TestUnexportedFieldsIgnored</code> plants an impossible tag on an unexported field and
-     demands silence. Each is one sentence of contract, executable.</p>
+      <code>TestSchemaReuse</code> interleaves failing, passing, and failing values through one
+      schema to prove no state leaks, then feeds a mismatched type to prove the type check;
+      <code>TestUnexportedFieldsIgnored</code> plants an impossible tag on an unexported field and
+      demands silence; <code>TestRecursiveTypesRejected</code> and
+      <code>TestCollectionElementsValidated</code> pin build-time termination and per-element
+      reachability (see above). Each is one sentence of contract, executable.</p>
 </section>
 
 <!-- ===================== 6. GO IN THE WILD ===================== -->
@@ -730,8 +822,8 @@ err = sc.<span class="fn">Validate</span>(tt.val)
         know which half of the work is structural overhead versus genuine data movement.</li>
   </ol>
   <p>The through-line: <code>reflect</code> + a tag string + fail-closed parsing + a precompiled
-     plan is not a teaching toy — it is the load-bearing architecture of Go's entire
-     declarative-config ecosystem, exercised here in ~550 lines with a fuzz target keeping the
+      plan is not a teaching toy — it is the load-bearing architecture of Go's entire
+      declarative-config ecosystem, exercised here in ~650 lines with a fuzz target keeping the
      parser honest and benchmarks keeping the performance story true.</p>
 </section>
 
