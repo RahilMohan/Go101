@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 13 — perfhunt</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>perfhunt</h1>
+  <p class="subtitle">Go101 · Project 13 — hunting allocations in a deliberately slow service</p>
+  <div class="badge-row">
+    <span class="badge tier">Advanced Tier</span>
+    <span class="badge">pprof</span>
+    <span class="badge">benchmarks</span>
+    <span class="badge">GODEBUG</span>
+    <span class="badge">CPU / heap profiles</span>
+    <span class="badge">Allocation reduction</span>
+    <span class="badge">GC tuning</span>
+    <span class="badge">Pure stdlib</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The stack: pprof + testing benchmarks + GODEBUG — all of it ships with Go</h3>
+  <p>perfhunt's toolchain is whatever <code>go test</code> already knows how to do. Benchmarks come from
+     <code>testing.B</code>, profiles from <code>runtime/pprof</code> driven by <code>go tool pprof</code>,
+     allocator/GC introspection from <code>GODEBUG=gctrace=1</code> and <code>GODEBUG=allocfreetrace=0</code>-era
+     knobs like <code>madvdontneed</code>. No profiler daemon, no APM agent, no benchmark framework in
+     <code>go.mod</code> — the entire performance curriculum is the standard library plus flags that have been
+     in the toolchain for a decade. That is deliberate: profiling is a skill about <em>reading your own
+     program</em>, and every third-party layer between you and the runtime is one more thing translating.</p>
+  <table>
+    <thead>
+      <tr><th>Tool</th><th>Role in perfhunt</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>testing.B</code> + <code>b.ReportAllocs()</code></td><td>Side-by-side <code>BenchmarkX/Slow</code> vs <code>BenchmarkX/Fast</code> sub-benchmarks over the same fixed dataset; ns/op, B/op, allocs/op per variant</td><td>A benchmark is an experiment design: same input, same engine, one variable changed — otherwise the number measures nothing</td></tr>
+      <tr><td><code>go test -bench -cpuprofile / -memprofile / -blockprofile</code> + <code>go tool pprof</code></td><td>CPU, heap/alloc-space, and block/mutex profiles of both implementations; flame graphs that name the exact anti-pattern (<code>regexp.Compile</code>, <code>runtime.convT64</code>, <code>sync.Mutex.Lock</code>)</td><td>Profiles are evidence, not vibes: each optimization claim in this project names the frame you should see disappear</td></tr>
+      <tr><td><code>GODEBUG=gctrace=1</code>, <code>GOGC</code>, <code>GOMEMLIMIT</code></td><td>Observing GC cadence before/after allocation fixes; tuning the collector once allocations are actually reduced</td><td>Tuning the GC before fixing allocations is optimizing the wrong side of the equation</td></tr>
+      <tr><td><code>net/http/pprof</code></td><td>Mentioned but deliberately unused here — Handler() is benchmarked via <code>httptest</code>, no server socket needed</td><td>You can profile HTTP-shaped work without opening a port; the endpoint import exists when you can't reproduce offline</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rejected alternatives</h3>
+  <ul>
+    <li><strong>Continuous profilers (Parca, Pyroscope, Datadog Continuous Profiler)</strong> — production-grade
+        and genuinely valuable for fleet-wide always-on sampling. But they add agents, storage backends, and UIs
+        to a lesson whose core loop is: run a benchmark, open a profile, find the hot frame. They also sample;
+        here we want deterministic whole-program attribution of a microbenchmark. Once you can read a
+        <code>pprof</code> flame graph by hand, the continuous tools are just that skill with retention.</li>
+    <li><strong>Third-party benchmark frameworks (<code>cerny/go-bench</code>-style harnesses, stat-heavy
+        comparison tools)</strong> — nice statistical dressing (deltas, confidence intervals, regression gates)
+        around the same <code>testing.B</code> output. Worth adopting when you operate CI performance budgets;
+        noise to a learner who first needs to understand what <code>b.N</code> even is. The stdlib harness plus
+        <code>benchstat</code>'s core idea (compare distributions, don't eyeball single runs) covers the
+        methodology lesson.</li>
+    <li><strong>Live services under load (wrk/vegeta against a running binary)</strong> — realistic, but couples
+        the lesson to network noise, connection handling, and load-generation artifacts. perfhunt instead keeps
+        every function pure and network-free so the benchmark isolates algorithmic cost (see D2).</li>
+    <li><strong>eBPF-based system profilers</strong> — superb for cross-service and kernel-adjacent questions,
+        wrong altitude entirely for "why does this function allocate 20k times per op".</li>
+  </ul>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>Profiles as falsifiable claims.</strong> Every anti-pattern → fix pair in this project carries a
+        named piece of profile evidence — delete the per-call <code>regexp.MustCompile</code> and
+        <code>syntax.Parse</code> frames vanish from the CPU flame graph; stop boxing floats into
+        <code>[]any</code> and <code>runtime.convT64</code> disappears from the heap profile. You learn to
+        <em>predict</em> a profile before taking it, which is what separates measurement from superstition.</li>
+    <li><strong>The three-number literacy of <code>go test -bench</code>.</strong> ns/op, B/op, allocs/op answer
+        different questions, and they can disagree — this repo's own TopK pair has the <em>slow</em> twin
+        allocating less than the fast one while still running ~2.5× slower. Learning to ask "which number am I
+        optimizing and why" is portable to every language with a benchmarking culture.</li>
+    <li><strong>Allocation discipline as the lever the GC hands you.</strong> Go's collector makes garbage cheap
+        but not free; reducing it moves latency tails and CPU in ways no <code>GOGC</code> tweak can. On one M1
+        Pro laptop the Aggregate rewrite runs <strong>~38×</strong> faster and drops allocs/op from
+        <strong>20,026 to 19</strong>; Normalize drops <strong>~22×</strong> (3,467 ns → 158 ns) and from 14
+        allocations to 1. Your machine will produce different absolute numbers — the ratios' orders of magnitude,
+        and the profile frames explaining them, will match.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>perfhunt_test.go</code> (shared verbatim by both packages) and
+     <code>solution/bench_test.go</code> — the executable specification.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — <code>Aggregate</code> computes a full summary in one pass.</strong> Count, distinct-ID count
+        (dedup via map, duplicates count once), sum/mean/min/max of <code>Value</code>, and a per-region
+        <code>Value</code> total map. Empty input yields the zero Summary with a non-nil empty
+        <code>ByRegion</code> and Mean/Min/Max left at zero — asserted exactly via
+        <code>reflect.DeepEqual</code> in <code>TestAggregateEmptyInput</code>.</li>
+    <li><strong>R2 — <code>TopK</code> returns the k most frequent items.</strong> Ordered by descending count,
+        ties broken ascending by item name; <code>k &lt;= 0</code> yields an empty slice; k larger than the
+        distinct count returns everything. Boundary cases (k=0, negative k, k exceeding distinct items) are
+        pinned as explicit table rows.</li>
+    <li><strong>R3 — <code>Normalize</code> canonicalizes tags ASCII-only.</strong> Lowercase ASCII letters,
+        keep digits, collapse every other byte-run into a single <code>-</code>, trim leading/trailing dashes.
+        Bytes ≥ 0x80 are separators — including runes that Unicode lowering would map into ASCII (the U+212A
+        KELVIN SIGN lowers to 'k'; out of spec here).</li>
+    <li><strong>R4 — <code>Handler</code> serves two GET routes.</strong> <code>/stats</code> returns the
+        aggregate JSON; <code>/tags?k=N</code> returns the top-N tag array (default N=5). Non-GET gets 405 with
+        <code>Allow: GET</code>; unknown paths get 404; responses carry
+        <code>Content-Type: application/json</code>; overflow-sized or negative <code>k</code> falls back to the
+        default rather than wrapping.</li>
+    <li><strong>R5 — Slow twins exist and behave identically.</strong>
+        <code>AggregateSlow</code>, <code>TopKSlow</code>, <code>NormalizeSlow</code>, <code>HandlerSlow</code>
+        satisfy the same spec as their fast counterparts — pinned by shared parity tests, not by convention.</li>
+    <li><strong>R6 — The dataset is fixed and deterministic.</strong> Seeded PRNG (source 42), 5000 records with
+        ~50% duplicate IDs across ≥2 regions, 15000-tag stream including Normalize-exercising variants
+        (<code>"Beta "</code>, <code>"--GAMMA--"</code>) — built once behind <code>sync.Once</code>, identical on
+        every run.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Correctness tests are timing-free.</strong> No test asserts on wall-clock durations;
+        speed differences live exclusively in benchmarks, which never gate correctness.</li>
+    <li><strong>NF2 — Every optimization claim is measurable.</strong> Each anti-pattern pair has a benchmark
+        sub-test plus a documented expected profile signature (see OPTIMIZATIONS.md's evidence column).</li>
+    <li><strong>NF3 — Concurrency-clean.</strong> Handlers hold no shared mutable state beyond the
+        <code>sync.Once</code>-guarded dataset; <code>go test -race ./...</code> passes.</li>
+    <li><strong>NF4 — Documented hazards stay documented.</strong> The hand-rolled float serializer would emit
+        invalid JSON for NaN/Inf — unreachable today because the dataset generates only finite seeded values,
+        and recorded as such in the code where the hazard lives.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: The baseline is preserved in-tree, not in history</h3>
+  <pre><code><span class="com">// slow.go is the preserved "intentionally slow baseline" commit for
+// Project 13. ... every classic Go performance mistake lives here,
+// side-by-side with the optimized rewrites in perfhunt.go, and
+// bench_test.go measures them against each other.</span></code></pre>
+  <p>Most tutorials show you the "before" as prose or a diff against a commit you can't easily check out.
+     perfhunt commits the anti-patterns as living code: <code>AggregateSlow</code> boxes floats through
+     <code>[]any</code> under mutexes, concatenates fingerprints with <code>+=</code>, dedups IDs with O(n²)
+     scans; <code>NormalizeSlow</code> compiles a fresh regexp every call. Keeping both versions compilable in
+     the same package means the learner can flip between them, profile either on demand, and — crucially — the
+     parity tests can hold them to the <em>same contract</em>. Slowness becomes a property you measure, not a
+     story you're told. The cost is dead code shipped to students; the payoff is that every claim about why
+     the fast path wins is one <code>go test -bench</code> away from verification.</p>
+
+  <h3>D2: Pure, network-free functions — benchmarks need no server</h3>
+  <pre><code>req := httptest.<span class="fn">NewRequest</span>(http.<span class="typ">MethodGet</span>, <span class="str">"/stats"</span>, <span class="kw">nil</span>)
+<span class="kw">return func</span>(b *testing.B) {
+    <span class="kw">for</span> i := <span class="num">0</span>; i &lt; b.N; i++ {
+        w := httptest.<span class="fn">NewRecorder</span>()
+        h(w, req)
+        body, _ := io.<span class="fn">ReadAll</span>(w.Result().Body)
+        _ = body
+    }
+}</code></pre>
+  <p>Even the HTTP handler is benched without a socket: <code>httptest.NewRequest</code> +
+     <code>NewRecorder</code> drive it in-process. This is the load-bearing decision for the whole project.
+     Network benchmarks mix your algorithm's cost with TCP, scheduler, and load-generator noise — the signal
+     drowns. Here every unit under test is a pure function of its arguments over a fixed dataset, so
+     ns/op measures exactly one thing. The tradeoff is honest: real services also pay serialization,
+     connection, and queueing costs, which is why the handler benchmark's delta looks modest next to
+     Aggregate's own — a lesson in itself (see the OPTIMIZATIONS.md note that the endpoint is dominated by
+     the aggregate it calls).</p>
+
+  <h3>D3: Parity tests pin slow == fast before anything may be fast</h3>
+  <pre><code><span class="kw">if</span> got, want := <span class="fn">AggregateSlow</span>(recs), <span class="fn">Aggregate</span>(recs); !reflect.<span class="fn">DeepEqual</span>(got, want) {
+    t.<span class="fn">Fatalf</span>(<span class="str">"slow %#v != fast %#v"</span>, got, want)
+}</code></pre>
+  <p>An intentionally slow twin is only pedagogically useful if it computes the <em>same thing</em> — otherwise
+     the benchmark compares apples to oranges and the speedup is partly cheating. So the spec's first-class
+     citizens are <code>TestSlowMatchesFast*</code>: identical seeded random records through both aggregates
+     compared with <code>DeepEqual</code>, TopK across k ∈ {-1, 0, 1, 3, 100}, Normalize across ASCII and
+     non-ASCII inputs, and k-parse acceptance matched case-by-case against <code>strconv.Atoi</code>.
+     Bitwise-identical summation order keeps Total/Mean/ByRegion exactly equal, so the comparison needs no
+     float tolerance. The rule generalizes: whenever you keep two implementations of one behavior, the
+     equality test comes first — it's what lets every later number mean something.</p>
+
+  <h3>D4: One pass beats three — the shape of the big win</h3>
+  <pre><code>sum.ByRegion[r.Region] += r.Value   <span class="com">// single probe</span>
+seen[r.ID] = <span class="kw">struct</span>{}{}            <span class="com">// map dedup, not O(n²) scan</span>
+<span class="com">// ...all of it inside ONE loop over records</span></code></pre>
+  <p>AggregateSlow walks the records five-plus times (boxed append pass, unbox-sum pass, min pass, max pass,
+     fingerprint/dedup/map pass, grand-total pass), boxes every Value into an interface, locks a mutex per
+     record, and probes <code>byRegion</code> three times per record. The fast version does everything in one
+     range loop with a presized <code>seen</code> map and index-based iteration (<code>r := &amp;records[i]</code>)
+     to avoid copying each struct. This single decision produces most of the headline win — on the reference
+     laptop ~38× ns/op and a 20,026 → 19 allocs/op collapse, dominated by killing the quadratic string
+     fingerprint and the boxing. The architectural takeaway isn't "one pass good": it's that <em>pass structure
+     and data representation dominate constant-factor tricks</em>, and profiles tell you which regime you're in.</p>
+
+  <h3>D5: Hand-assembled JSON at the edge — with the hazard written down</h3>
+  <pre><code>buf = strconv.<span class="fn">AppendFloat</span>(buf, s.Total, <span class="str">'g'</span>, -<span class="num">1</span>, <span class="num">64</span>)
+...
+<span class="com">// KNOWN LATENT HAZARD (review round 1, deferred by design): the
+// hand-rolled float serialization emits bare NaN/+Inf/-Inf for non-finite
+// values, which is INVALID JSON. This is unreachable today because
+// dataset() generates only finite seeded values...</span></code></pre>
+  <p><code>HandlerSlow</code> builds a <code>map[string]any</code> and reflects over it with
+     <code>encoding/json</code>; <code>Handler</code> appends bytes directly with
+     <code>strconv.AppendInt/AppendFloat/AppendQuote</code> into one reusable buffer — halving allocs/op
+     (70 → 36 on the reference run) and removing all reflection machinery from the request path. The honest
+     part is the comment above: <code>encoding/json</code> rejects NaN/Inf with an error, while the hand-rolled
+     serializer would happily emit invalid JSON. The dataset's finiteness is what makes the hazard latent, and
+     the fix condition ("if the dataset ever becomes data-driven... a finite check MUST be added") is stated
+     where a future editor will trip over it. Fast paths buy you control, and control obligates you to write
+     down what the library used to guarantee for free.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>CPU vs heap vs block profiles — three questions, three instruments</h3>
+  <pre><code>go test -bench=BenchmarkAggregate -cpuprofile cpu.out ./solution/
+go tool pprof -top solution/cpu.out          <span class="com">// who burns the cycles?</span>
+go test -bench=BenchmarkAggregate -memprofile mem.out ./solution/
+go tool pprof -top -sample_index=alloc_space solution/mem.out
+                                             <span class="com">// who mints the garbage?</span></code></pre>
+  <p>Each profile answers a different question, and using the wrong one wastes days. <strong>CPU
+     profiles</strong> sample stacks while threads run: use them to find compute hot spots — in this repo they
+     expose <code>regexp.(*Regexp).Compile</code>/<code>syntax.Parse</code> dominating NormalizeSlow,
+     <code>runtime.concatstrings</code>/<code>growslice</code> dominating the fingerprint loop.
+     <strong>Heap/alloc profiles</strong> attribute allocated bytes (or objects — switch
+     <code>-sample_index</code>) to call sites: here they catch <code>runtime.convT64</code>, the frame where
+     each boxed float64 escapes to the heap. <strong>Block and mutex profiles</strong> record time waiting on
+     synchronization — mostly zeros in this project precisely because the mutexes guard unshared
+     single-goroutine work, which is itself the finding: uncontended lock/unlock pairs still cost ~20ns each,
+     times n records, buying nothing. The workflow is always: benchmark → profile → name the frame → predict
+     the fix → re-profile to confirm the frame vanished.</p>
+
+  <h3>Reading allocs/op — and knowing when it lies</h3>
+  <pre><code>BenchmarkTopK/Slow   543262 ns/op     1248 B/op      11 allocs/op
+BenchmarkTopK/Fast   217146 ns/op     3832 B/op       7 allocs/op</code></pre>
+  <div class="callout">
+    <p><strong>The honesty note:</strong> perfhunt's own TopK pair has the slow twin allocating <em>less</em>
+       than the fast one — its mutex-guarded counter map is never presized, so it grows lazily into fewer,
+       larger chunks. Yet it runs ~2.5× slower. ns/op and allocs/op tell different stories.</p>
+  </div>
+  <p>allocs/op counts allocations per timed operation — a proxy for GC pressure and allocator work, not for
+     speed. It's most diagnostic in extremes: AggregateSlow's 20,026 allocs/op means roughly four allocations
+     per record, each paying allocator bookkeeping and eventually collector work; the fast path's 19 is
+     effectively constant regardless of input size. Normalize is the cleanest teaching case — 14 allocs → 1:
+     compiling a regexp allocates its program and tables on <em>every call</em>, while the byte-scanner
+     allocates exactly one result buffer. The transferable habit: when allocs/op scales with n, hunt for
+     per-element allocations hiding in loops (boxing, string concat, per-call compilation); when it doesn't,
+     stop optimizing allocations and go look at the CPU profile instead.</p>
+
+  <h3>Benchmark methodology — b.N, stability, and machine dependence</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">BenchmarkAggregate</span>(b *testing.B) {
+    b.<span class="fn">Run</span>(<span class="str">"Fast"</span>, <span class="kw">func</span>(b *testing.B) {
+        b.<span class="fn">ReportAllocs</span>()
+        <span class="kw">for</span> i := <span class="num">0</span>; i &lt; b.N; i++ {
+            _ = <span class="fn">Aggregate</span>(benchRecords)
+        }
+    })
+}</code></pre>
+  <p>The harness picks <code>b.N</code> adaptively: it runs the function, estimates throughput, and re-runs
+     with larger N until the measurement stabilizes — your job is only to write a loop that does exactly one
+     operation per iteration and nothing else inside the timer. Setup lives outside the loop (here,
+     <code>benchRecords</code>/<code>benchTags</code> come from package-level <code>dataset()</code> built long
+     before any timer starts). Sub-benchmarks share one input so Slow/Fast deltas isolate implementation, and
+     results should be compared with <code>benchstat</code> over multiple runs, never eyeballed from a single
+     line. And the caveat that governs every number in this doc: benchmarks are machine-bound. The reference
+     figures below come from one Apple M1 Pro at <code>-benchtime=10x</code> — order-of-magnitude evidence.
+     Your laptop will disagree on absolutes and almost certainly on precise ratios; what should reproduce
+     everywhere is the sign of every delta and the profile frames explaining it.</p>
+  <table>
+    <thead>
+      <tr><th>Benchmark (reference run)</th><th>Slow</th><th>Fast</th><th>Delta</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Aggregate</td><td>8,688,692 ns/op · 603,761 B/op · 20,026 allocs/op</td><td>225,342 ns/op · 218,688 B/op · 19 allocs/op</td><td>~38× faster, allocs ÷ ~1054</td></tr>
+      <tr><td>Normalize</td><td>3,467 ns/op · 4,804 B/op · 14 allocs/op</td><td>158 ns/op · 6 B/op · 1 alloc/op</td><td>~22× faster, allocs ÷ 14</td></tr>
+      <tr><td>TopK</td><td>543,262 ns/op · 11 allocs/op</td><td>217,146 ns/op · 7 allocs/op</td><td>~2.5× faster (slow allocates less!)</td></tr>
+      <tr><td>HandlerStats</td><td>289,538 ns/op · 70 allocs/op</td><td>211,454 ns/op · 36 allocs/op</td><td>allocs halved; ns/op bounded by Aggregate itself</td></tr>
+    </tbody>
+  </table>
+
+  <h3>GC tuning knobs — after the allocations, not instead of them</h3>
+  <pre><code>GODEBUG=gctrace=1 go test -bench=. -run=NONE ./solution/
+<span class="com">// gc 3 @0.052s 1%: 0.09+0.8+0.03 ms clock, ... 12->6 MB</span>
+
+GOGC=200 GOMEMLIMIT=512MiB ./service   <span class="com">// fewer, bigger cycles</span></code></pre>
+  <p>Go's collector is concurrent, tri-color, and non-compacting; you tune it with three levers. <strong>GOGC</strong>
+     sets heap growth between cycles (default 100 = collect when the heap doubles): raising it trades memory for
+     fewer collections. <strong>GOMEMLIMIT</strong> (Go 1.19+) caps total runtime memory, soft-clamping the
+     collector before the OS does it harder — the right tool when GOGC alone risks unbounded growth.
+     <strong>GODEBUG=gctrace=1</strong> prints each cycle's pause, CPU fraction, and heap size so you can see
+     cadence change. The ordering lesson is the whole point: run gctrace on the slow baseline and you'll watch
+     the collector thrash through thousands of tiny allocations; apply the Aggregate fix first and the same
+     trace shows collection nearly vanishing — <em>then</em> GOGC/GOMEMLIMIT become meaningful refinements for
+     tail latency and memory ceilings. Tuning the collector before fixing allocations optimizes the cost of
+     producing garbage rather than the garbage itself.</p>
+
+  <h3>When NOT to reach for these tools</h3>
+  <div class="callout">
+    <p><strong>The rule:</strong> profile before optimizing. Most code is fast enough; the expensive lines are
+       rarely the ones you'd guess, and intuition-driven optimization reliably beautifies cold paths.</p>
+  </div>
+  <p>Three boundaries worth naming. <strong>Cold code:</strong> startup-time work running once doesn't deserve
+     a single allocation saved — the complexity cost outweighs nanoseconds nobody experiences.
+     <strong>Unprofiled suspicions:</strong> if you can't name the frame you expect to disappear, take the
+     profile first; half of perfhunt's anti-patterns (the dead fingerprint string, the pointless mutexes) are
+     things a reader might "optimize" forever without noticing they weren't even the bottleneck.
+     <strong>Wrong altitude:</strong> microbenchmarks answer per-function questions; capacity planning,
+     p99-under-load, and multi-service questions need load tests and production observability — a 38× local
+     speedup says nothing about whether the endpoint was ever slow for users.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>Correctness is timing-free; timing lives only in benchmarks</h3>
+  <pre><code><span class="kw">if</span> !approx(body.Total, want.Total) || !approx(body.Mean, want.Mean) ||
+   !approx(body.Min, want.Min) || !approx(body.Max, want.Max) { ... }
+<span class="com">// No test anywhere asserts on elapsed time — benchmarks measure,</span>
+<span class="com">// tests verify.</span></code></pre>
+  <p>Every test in the suite asserts on values, statuses, and shapes — never on durations. This separation is
+     what makes a performance-teaching repo CI-safe: timing assertions flake on loaded machines and teach the
+     wrong lesson when green. The functional suite covers known-record aggregation (duplicate ID counted once),
+     empty-input zero-Summary semantics via <code>DeepEqual</code>, TopK ordering/tie-breaking/limits including
+     k=0 and negative k, the full Normalize table, and handler routing (404, 405 with method checks, default
+     and explicit <code>?k=</code>). Performance claims get their own instrument — benchmarks — which are run
+     deliberately, not gated.</p>
+
+  <h3>Parity twins: the executable equivalence proof</h3>
+  <pre><code><span class="kw">for</span> _, s := <span class="kw">range</span> []<span class="typ">string</span>{
+    <span class="str">"\u212A"</span>, <span class="str">"A\u212AB"</span>, <span class="str">"caf\u00E9"</span>, <span class="str">"\u00C5rge"</span>,
+} {
+    <span class="kw">if</span> got, want := <span class="fn">NormalizeSlow</span>(s), <span class="fn">Normalize</span>(s); got != want {
+        t.<span class="fn">Fatalf</span>(<span class="str">"Normalize(%q): slow %q != fast %q"</span>, s, got, want)
+    }
+}</code></pre>
+  <p><code>TestSlowMatchesFast*</code> is the suite's backbone: identical seeded inputs through both
+     implementations, <code>DeepEqual</code> verdicts, bitwise-equal floats because summation order matches.
+     These tests earned their keep the hard way during adversarial review, which found two real holes in the
+     original parity claim — and both now ship as regression cases:</p>
+  <ul>
+    <li><strong>The Normalize unicode-parity hole (fleet finding F1).</strong> <code>strings.ToLower</code> is
+        Unicode-aware: the U+212A KELVIN SIGN lowers to ASCII <code>k</code>, so the original
+        <code>NormalizeSlow("\u212A")</code> returned <code>"k"</code> while the byte-scanning
+        <code>Normalize</code> returned <code>""</code> (non-ASCII bytes are separators, trimmed). The fix made
+        the contract explicit — bytes ≥ 0x80 are separators — and had the slow twin blank out non-ASCII bytes
+        <em>before</em> lowering (<code>blankOutNonASCII</code>), so the twins agree byte-for-byte. The Kelvin
+        sign, <code>café</code>, and <code>Årge</code> cases pin it permanently.</li>
+    <li><strong>The k-overflow guard (fleet finding F2).</strong> The slow handler's hand-rolled
+        <code>atoiSimple</code> accumulated digits without a range check, so
+        <code>/tags?k=99999999999999999999</code> silently wrapped to a large positive int and returned all
+        rows, while the fast path's <code>strconv.Atoi</code> errors and keeps the default k=5.
+        <code>atoiSimple</code> now mirrors Atoi's cutoff/limit arithmetic, and
+        <code>TestSlowMatchesFastParseK</code> sweeps overflow, MinInt-edge, sign-only, and garbage strings,
+        asserting acceptance agreement with <code>strconv.Atoi</code> plus exact value agreement where
+        accepted. <code>TestHandlerTagsKOverflowDefault</code> pins the end-to-end behavior: huge k means
+        default k=5, never a wrap.</li>
+  </ul>
+
+  <h3>Race detector and shared-state hygiene</h3>
+  <pre><code>var (
+    datasetOnce sync.Once
+    datasetRecs []Record
+    datasetTags []string
+)</code></pre>
+  <p><code>go test -race ./solution/...</code> passes because the handlers own no mutable shared state: every
+     request works on freshly allocated buffers, and the one shared artifact — the embedded corpus — is built
+     exactly once behind <code>sync.Once</code> with deterministic seed 42. The race check matters more than
+     usual here because the codebase deliberately contains mutexes (in the slow twins); verifying they're
+     <em>unnecessary</em> overhead rather than <em>necessary</em> protection requires proving the data really is
+     goroutine-local, and the detector is that proof.</p>
+
+  <h3>The NaN hazard: documented, tested-around, honestly deferred</h3>
+  <p>Adversarial review confirmed that feeding NaN <code>Value</code>s into <code>Aggregate</code> propagates
+     <code>Mean=NaN</code> (and all-NaN input leaves <code>Min=+Inf, Max=-Inf</code>), which the hand-rolled
+     serializer would emit as bare <code>NaN</code>/<code>+Inf</code> — invalid JSON. It is unreachable today:
+     <code>dataset()</code> generates only finite seeded values (<code>rng.Intn(100_00)/100</code>), and the
+     handlers accept no caller data. Rather than paper over it, the hazard lives as a comment at the exact
+     <code>AppendFloat</code> call sites stating the trigger condition ("if the dataset ever becomes
+     data-driven or Aggregate accepts caller input here, a finite check MUST be added"). The testing lesson:
+     when a defect can't be exercised without changing the architecture, the next-best control is a
+     machine-readable warning at the vulnerable line — plus the fixed-dataset determinism tests
+     (<code>TestDatasetShape</code>) that keep the current safety argument true.</p>
+
+  <h3>What the benchmarks assert (carefully)</h3>
+  <p>Benchmarks assert nothing about correctness — by design — but their <em>structure</em> encodes claims: the
+     Slow/Fast sub-benchmarks share one dataset and one request object, <code>b.ReportAllocs()</code> makes the
+     B/op and allocs/op columns mandatory, setup sits outside the timed loop, and
+     <code>-benchtime=10x</code> in the reference run trades stability for speed while the doc labels the
+     output "order-of-magnitude evidence." The remaining gap — that a reader might mistake one noisy run for a
+     law — is closed by the methodology walkthrough's instruction to compare multiple runs with
+     <code>benchstat</code> on their own hardware.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>pprof, allocation discipline, and GC tuning aren't academic exercises — they're routine maintenance on
+       some of the largest Go fleets on earth:</p>
+    <ul>
+      <li><strong>Uber's Go GC tuning</strong> — Uber engineers wrote up tuning <code>GOGC</code> and later
+          championed <code>GOMEMLIMIT</code> (which grew out of their proposal work) to tame container memory
+          ceilings: raising GOGC cut GC CPU on CPU-bound services, and GOMEMLIMIT made that safe near hard
+          memory limits. Exactly the knobs this project exercises — after, not before, fixing allocations.</li>
+      <li><strong>Cloudflare's pprof culture</strong> — Cloudflare has published multiple deep-dives using Go
+          pprof on production edges, from diagnosing a memory leak via heap profiles in Rust-adjacent Workers'
+          Go components to profiling their DNS infrastructure; their posts are essentially this project's
+          workflow (benchmark → profile → name the frame → fix → re-profile) at fleet scale, with
+          <code>net/http/pprof</code> exposed carefully behind access controls.</li>
+      <li><strong>Dgraph / Badger allocation work</strong> — the Dgraph database and its embeddable KV store
+          Badger were built allocation-first: value-log design, arena-style buffers, and repeated public
+          releases citing reduced allocs/op and GC pauses. Badger's README-era benchmarks read like this
+          project's table — ns/op, B/op, allocs/op — because its maintainers treated those columns as release
+          criteria.</li>
+      <li><strong>The Go runtime itself</strong> — every escape-analysis improvement, <code>sync.Pool</code>
+          addition, and GC cycle in the standard library was validated with the same <code>testing.B</code>
+          harness and <code>benchstat</code> comparisons used here; the compiler's own benchmarks live in
+         -tree under <code>test/bench</code> and the x/bench repository.</li>
+    </ul>
+  </div>
+
+  <h3>Why the stdlib profiling stack stuck despite flashier alternatives</h3>
+  <ol>
+    <li><strong>Zero-friction ubiquity beats best-of-breed tooling you have to deploy.</strong> Any Go process
+        — yours, a vendor's, a customer's — exposes a CPU profile with one import or one flag. When Slack, an
+        issue tracker, and a curl command can pull a flame graph from prod, profiling happens; when it requires
+        standing up a continuous-profiler backend, profiling happens next quarter. The ecosystem's default
+        posture is that <em>every</em> Go engineer can read pprof output, so every team invests in keeping that
+        skill current.</li>
+    <li><strong>The allocation story is unusually legible.</strong> Go's GC made raw allocation cheaper than in
+        stop-the-world collectors, which shifted performance work toward a simple, teachable currency:
+        bytes and objects per operation. That's why B/op and allocs/op became community lingua franca, why
+        <code>escape analysis</code> entered ordinary engineering vocabulary, and why projects from Docker to
+        Kubernetes publish allocation-reduction PRs as routine hygiene.</li>
+    <li><strong>GC tunability arrived when hardware did.</strong> GOGC dates to the earliest releases;
+        GOMEMLIMIT landed in Go 1.19 specifically because cloud containers made hard memory ceilings universal.
+        Uber's production experience fed the design discussion — a straight line from fleet-scale pain to a
+        flag you can try on this repo's benchmarks tonight.</li>
+  </ol>
+  <p>The through-line: a preserved slow twin, a benchmark harness, and three profile types are not a teaching
+     simplification of production performance work — they <em>are</em> production performance work, minus the
+     pager. Learn the loop here on functions you can fully hold in your head, and the day you're staring at a
+     real service's flame graph, the only new thing will be the stakes.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="12-pipeline.html">&larr; Previous: pipeline</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 13 of 16</span>
+  <a class="btn" href="14-fastthumb.html">Next: fastthumb &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
