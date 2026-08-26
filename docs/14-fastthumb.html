@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go101 · Project 14 — fastthumb</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+  }
+  header h1 {
+    font-size: 2.75rem;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+  }
+  header .subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.15rem;
+    color: var(--muted);
+  }
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(88,166,255,0.45);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+  .badge.tier { color: var(--green); border-color: rgba(63,185,80,0.45); background: rgba(63,185,80,0.08); }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+  section > h2 {
+    display: inline-block;
+    font-size: 1.25rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(63,185,80,0.4);
+    color: var(--green);
+    margin-bottom: 1.25rem;
+  }
+  section > h2 .sec-num { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p, li { color: var(--text); font-size: 0.97rem; }
+  p { margin-bottom: 0.85rem; }
+  ul, ol { margin: 0 0 0.85rem 1.4rem; }
+  li { margin-bottom: 0.35rem; }
+  strong { color: var(--accent); }
+  em { color: var(--muted); }
+  a { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: rgba(88,166,255,0.07); color: var(--accent); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    background: rgba(110,118,129,0.18);
+    border-radius: 5px;
+    padding: 0.12em 0.35em;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0 1.25rem;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  /* basic syntax highlighting */
+  .kw { color: var(--red); }
+  .str { color: #a5d6ff; }
+  .com { color: var(--muted); font-style: italic; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .typ { color: #ffa657; }
+  .sidebar {
+    border-left: 3px solid var(--purple);
+    background: rgba(188,140,255,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .sidebar p:last-child, .sidebar ul:last-child { margin-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--yellow);
+    background: rgba(210,153,34,0.06);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.15rem;
+    margin: 1rem 0;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 860px;
+    margin: 3rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a.btn {
+    text-decoration: none;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.95rem;
+    transition: transform 150ms ease, border-color 150ms ease;
+  }
+  footer a.btn:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  footer a.btn.disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Animations (NudaUI-style, pasted inline) — all motion-gated ===== */
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* Fade-up entrance on section reveal (IntersectionObserver adds .visible).
+       Hidden state only applies when JS is active (html.js set by inline script),
+       so no-JS rendering and printing always show every section. */
+    .js .reveal {
+      transition: opacity 600ms ease-out, transform 600ms ease-out;
+    }
+    .js .reveal:not(.visible) {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .js .reveal:nth-of-type(odd):not(.visible) { transition-delay: 40ms; }
+
+    /* Subtle gradient pulse on the header tier badge */
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(63,185,80,0.30);
+        border-color: rgba(63,185,80,0.45);
+      }
+      50% {
+        box-shadow: 0 0 16px 3px rgba(63,185,80,0.40);
+        border-color: rgba(63,185,80,0.90);
+      }
+    }
+    .badge.tier { animation: badge-pulse 2.4s ease-in-out infinite; }
+
+    /* Hover glow on code blocks */
+    @keyframes code-glow {
+      0%, 100% { box-shadow: 0 0 6px 0 rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.35); }
+      50%      { box-shadow: 0 0 18px 2px rgba(88,166,255,0.28); border-color: rgba(88,166,255,0.70); }
+    }
+    pre:hover { animation: code-glow 1.8s ease-in-out infinite; }
+
+    /* Soft sweep highlight across table headers */
+    @keyframes th-sweep {
+      0%, 100% { background: rgba(88,166,255,0.07); }
+      50%      { background: rgba(88,166,255,0.16); }
+    }
+    th { animation: th-sweep 3.2s ease-in-out infinite; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+  /* Printing must always show every section, even ones never scrolled into view. */
+  @media print {
+    .js .reveal:not(.visible) { opacity: 1 !important; transform: none !important; transition: none !important; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="reveal visible">
+  <h1>fastthumb</h1>
+  <p class="subtitle">Go101 · Project 14 — image thumbnailing with an optional cgo/libvips boundary</p>
+  <div class="badge-row">
+    <span class="badge tier">Advanced Tier</span>
+    <span class="badge">image</span>
+    <span class="badge">cgo (optional)</span>
+    <span class="badge">build tags</span>
+    <span class="badge">unsafe.Pointer</span>
+    <span class="badge">Bilinear resampling</span>
+    <span class="badge">Decompression-bomb guard</span>
+  </div>
+  <a class="back-link" href="index.html">&larr; Back to all projects</a>
+</header>
+
+<main>
+
+<!-- ===================== 1. STACK EVALUATION ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">01</span>Stack Evaluation</h2>
+  <h3>The decision: pure-Go default, cgo kept available behind a tag</h3>
+  <p>The brief for this project says "cgo + libvips binding" — so the first thing we did
+     honestly was try to build exactly that, and then <strong>rejected it as the default
+     stack on this host</strong>. The recorded tier decision: <code>pkg-config</code> could
+     not resolve libvips and no C headers are installed, so a cgo build would fail before
+     compiling a single line of Go. Rather than ship a project that cannot compile without a
+     system dependency nobody has, fastthumb ships two things:</p>
+  <ul>
+    <li><strong>A pure-Go implementation using the stdlib <code>image</code> package</strong>
+        (<code>png</code>, <code>jpeg</code>, <code>image/color</code>) as the default build.
+        Every test passes with <code>CGO_ENABLED=0</code>, no toolchain beyond Go itself,
+        and trivial cross-compilation.</li>
+    <li><strong>A real cgo/libvips binding in
+        <code>solution/vips_binding.go</code></strong>, gated behind the <code>vips</code>
+        build tag (<code>//go:build vips</code>). It demonstrates the entire boundary
+        discipline — <code>vips_init</code>, <code>C.CBytes</code> buffer handoff,
+        <code>runtime.KeepAlive</code> — and its failure mode when libvips is absent is
+        intentional and contained: <code>go build -tags vips</code> fails loudly at
+        <code>'vips/vips.h' file not found</code>, while the default build never touches it.</li>
+  </ul>
+  <p>This is not a dodge — it is the lesson. The trade between <em>portability</em> (pure Go:
+     any host, any target, one command) and <em>throughput</em> (libvips' shrink-on-load can
+     skip entropy-decoding most JPEG scanlines, often 5–20× faster than decode-then-resize)
+     is precisely the engineering decision every production imaging service makes. We made
+     it explicitly, recorded it before writing code, and built both sides so you can feel
+     what each costs.</p>
+
+  <h3>The pure-Go packages, and what they teach</h3>
+  <table>
+    <thead>
+      <tr><th>Package</th><th>Role in fastthumb</th><th>Lesson it carries</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>image/png</code>, <code>image/jpeg</code></td><td>Decode/encode both supported formats; <code>image.DecodeConfig</code> peeks header dimensions without decoding pixels</td><td>The decoder registry pattern (<code>init</code>-registered formats) and the fact that a header parse and a full decode are different operations with wildly different memory costs</td></tr>
+      <tr><td><code>image/color</code></td><td><code>Color.RGBA()</code> as the universal premultiplied 16-bit currency; <code>NRGBA</code>/<code>NRGBAModel</code> for straight-alpha storage and verification</td><td>Premultiplied vs straight alpha is not trivia — conflating them visibly corrupts translucent images (see D4)</td></tr>
+      <tr><td><code>bytes</code>, <code>errors</code>, <code>fmt</code></td><td>In-memory buffers, sentinel errors (<code>ErrBadFormat</code>, <code>ErrBadDims</code>) wrapped with <code>%w</code> at every path</td><td>Callers must be able to <code>errors.Is</code>; swallowed sentinels are API lies</td></tr>
+      <tr><td>cgo + <code>unsafe</code> (tag-gated)</td><td><code>vips_binding.go</code>: init lifecycle, C-heap allocation via <code>C.CBytes</code>/<code>C.CString</code> with matching frees, staged output buffer, <code>runtime.KeepAlive</code></td><td>The pointer-passing rules that keep cgo memory-safe under GC, call-overhead economics, and why build tags exist</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What this stack uniquely teaches</h3>
+  <ol>
+    <li><strong>The cgo boundary as a protocol, not a syntax.</strong> The cost model (~tens to
+        hundreds of nanoseconds per crossing), the pointer rules (no Go pointers retained by C,
+        C owns what C keeps), and the scheduler implications of blocking calls — these decide
+        whether a binding is production-grade or a data-corruption bug waiting for the GC.</li>
+    <li><strong>Build tags as an architecture tool.</strong> A file that provably cannot leak
+        into default builds — verified with <code>go list -f '{{.GoFiles}}
+        {{.IgnoredGoFiles}}'</code> showing <code>[fastthumb.go] [vips_binding.go]</code> —
+        lets optional system dependencies coexist with green CI.</li>
+    <li><strong>Hostile-input budgeting.</strong> A thumbnailer accepts attacker-controlled
+        bytes and allocates proportional to their claims. The DecodeConfig pre-flight check
+        (found by adversarial review, see D2) turned a multi-gigabyte allocation attack into a
+        sub-millisecond rejection — a complete miniature of service-hardening thinking.</li>
+  </ol>
+</section>
+
+<!-- ===================== 2. REQUIREMENTS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">02</span>Requirements</h2>
+  <p>Derived directly from <code>fastthumb_test.go</code> — the executable specification.
+     If your implementation passes these tests, it satisfies the requirements.</p>
+
+  <h3>Functional</h3>
+  <ul>
+    <li><strong>R1 — Magic-byte format sniffing.</strong> <code>Format(src)</code> returns
+        <code>"png"</code> for the full 8-byte PNG signature (<code>\x89PNG\r\n\x1a\n</code>,
+        truncated headers rejected) and <code>"jpeg"</code> for the <code>FF-D8-FF</code>
+        prefix; everything else — empty input, garbage text, GIF magic — wraps
+        <code>ErrBadFormat</code>.</li>
+    <li><strong>R2 — Aspect-preserving fit, never upscaling.</strong> <code>Thumb</code>
+        produces the largest rectangle fitting inside the w×h box while preserving aspect
+        ratio; sources smaller than the box keep their original dimensions
+        (<code>{"no-upscale-small-source", 30, 20, 100, 100, 30, 20}</code>).</li>
+    <li><strong>R3 — Same-format round trip.</strong> JPEG in → JPEG out, PNG in → PNG out,
+        with correct fitted geometry after re-decoding the output.</li>
+    <li><strong>R4 — Exact-size bilinear Resize.</strong> <code>Resize(img, w, h)</code>
+        scales to exactly w×h; a solid-color source stays that color everywhere within a
+        ±2/65535 tolerance per channel.</li>
+    <li><strong>R5 — Dimension validation with sentinels.</strong> Non-positive dims
+        (<code>0</code>, <code>-1</code>) and dims above <code>MaxDim</code> (8192) wrap
+        <code>ErrBadDims</code> before any decode; corrupt or nil input wraps
+        <code>ErrBadFormat</code>; error paths return non-nil-output = never.</li>
+    <li><strong>R6 — Translucent-source fidelity.</strong> Resampling an
+        <code>NRGBA{255,0,0,128}</code> source must yield exactly
+        <code>NRGBA{255,0,0,128}</code> per pixel — including after a full PNG round trip.
+        Darkening translucent red toward black (the classic premultiply bug) fails this test.</li>
+    <li><strong>R7 — Decompression bombs rejected pre-decode.</strong> A small PNG whose IHDR
+        declares dimensions over the <code>MaxSrcDim</code>/pixel-budget limits must be
+        rejected with an <code>ErrBadDims</code> wrap in well under a second — proving the
+        check ran before any bitmap allocation.</li>
+  </ul>
+
+  <h3>Non-functional</h3>
+  <ul>
+    <li><strong>NF1 — Default build needs nothing but Go.</strong> No libvips, no pkg-config,
+        no C toolchain: <code>go build ./...</code> and <code>go test ./...</code> pass with
+        CGO disabled, and cross-compilation stays a one-liner.</li>
+    <li><strong>NF2 — The cgo path is opt-in and contained.</strong> With
+        <code>-tags vips</code> on a host lacking libvips, the failure is loud, immediate, and
+        confined to the tagged file; default builds/tests/vet/cross-compilation are provably
+        unaffected (<code>IgnoredGoFiles</code> containment).</li>
+    <li><strong>NF3 — Race-clean.</strong> The suite runs green under <code>-race</code>.</li>
+    <li><strong>NF4 — No committed binaries.</strong> Every fixture — including the hostile
+        ones — is synthesized inside the test process.</li>
+  </ul>
+</section>
+
+<!-- ===================== 3. ARCHITECTURE DECISIONS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">03</span>Architecture Decisions</h2>
+
+  <h3>D1: Sniff by magic bytes, then trust the sniffed decoder</h3>
+  <pre><code><span class="kw">var</span> pngMagic = []<span class="typ">byte</span>(<span class="str">"\x89PNG\r\n\x1a\n"</span>)
+
+<span class="kw">case</span> len(src) &gt;= <span class="num">3</span> &amp;&amp; src[<span class="num">0</span>] == <span class="num">0xFF</span> &amp;&amp; src[<span class="num">1</span>] == <span class="num">0xD8</span> &amp;&amp; src[<span class="num">2</span>] == <span class="num">0xFF</span>:
+    <span class="kw">return</span> <span class="str">"jpeg"</span>, <span class="kw">nil</span></code></pre>
+  <p>fastthumb does not ask callers for a format string and does not rely on filename
+     extensions — it reads bytes. PNG's signature is all 8 magic bytes required; a truncated
+     header fails the length check rather than panicking on a short slice. The JPEG check is
+     deliberately a 3-byte prefix (the SOI marker <code>FF D8 FF</code>), which is enough to
+     route to the right decoder — and if those 3 bytes were all there was, the decode step
+     itself produces an error wrapped with <code>%w</code>, so
+     <code>errors.Is(err, ErrBadFormat)</code> still holds. Two-stage honesty: sniff cheaply,
+     fail precisely. The sniffed name also decides the <em>output</em> encoder, which is how
+     R3's same-format guarantee falls out of structure instead of extra bookkeeping.</p>
+
+  <h3>D2: The DecodeConfig pre-flight — the decompression-bomb guard</h3>
+  <pre><code>cfg, _, err := image.<span class="fn">DecodeConfig</span>(bytes.<span class="fn">NewReader</span>(src))
+<span class="kw">if</span> cfg.Width &gt; MaxSrcDim || cfg.Height &gt; MaxSrcDim ||
+    int64(cfg.Width)*int64(cfg.Height) &gt; maxSrcPixels {
+    <span class="kw">return</span> <span class="kw">nil</span>, <span class="str">""</span>, fmt.<span class="fn">Errorf</span>(
+        <span class="str">"fastthumb: source %dx%d exceeds budget (%d per side, %d pixels): %w"</span>,
+        cfg.Width, cfg.Height, MaxSrcDim, maxSrcPixels, ErrBadDims)
+}</code></pre>
+  <p>This guard did not exist in the first version. Adversarial review found the hole with a
+     ~300-byte valid 8×8 PNG whose IHDR width/height fields were patched to huge values (CRC
+     fixed): the probe measured <strong>3,433 MiB allocated in 4 ms</strong> at 30000×30000,
+     <strong>13.7 GiB and a 4-second stall</strong> at 60000×60000, and a &gt;10 s hang at
+     100000×100000. Why so easy? Go's PNG decoder sizes its buffers from the declared header
+     <em>before validating pixel data</em> — a few hundred attacker-chosen bytes become a
+     gigabytes-scale allocation request. The fix exploits the same fact: parsing
+     <em>only</em> the header via <code>image.DecodeConfig</code> costs almost nothing, so the
+     declared dimensions can be checked against a two-part budget — <code>MaxSrcDim =
+     20000</code> per side plus <code>maxSrcPixels = 1 &lt;&lt; 26</code> total (~256 MiB of
+     RGBA). The pixel cap matters because a 20000×4000 source passes each per-side check
+     individually while still declaring 80M pixels. The regression test now rejects crafted
+     bombs in effectively ~0 ms, with a wall-clock assertion (&lt;900 ms) proving the full
+     decode never ran.</p>
+
+  <h3>D3: The no-upscale rule, in integer arithmetic</h3>
+  <pre><code><span class="kw">func</span> <span class="fn">fitDims</span>(w, h, maxW, maxH int) (int, int) {
+    <span class="kw">if</span> w &lt;= maxW &amp;&amp; h &lt;= maxH {
+        <span class="kw">return</span> w, h                      <span class="com">// fits: keep original size</span>
+    }
+    <span class="kw">if</span> int64(h)*int64(maxW) &lt;= int64(w)*int64(maxH) {
+        nh := maxInt(<span class="num">1</span>, h*maxW/w)
+        <span class="kw">return</span> maxInt(<span class="num">1</span>, maxW), nh       <span class="com">// width-constrained</span>
+    }
+    nw := maxInt(<span class="num">1</span>, w*maxH/h)
+    <span class="kw">return</span> nw, maxInt(<span class="num">1</span>, maxH)          <span class="com">// height-constrained</span>
+}</code></pre>
+  <p>"Never upscale" is a product decision with technical teeth: enlarging invents pixels,
+     doubles memory and encode time, and flatters nobody. The first branch encodes it — a
+     source that already fits keeps its size untouched. For the shrink case, comparing the
+     two candidate scales uses integer cross-multiplication (<code>h*maxW vs w*maxH</code>)
+     instead of floating division, eliminating precision surprises at the tie boundary;
+     <code>int64</code> intermediates make overflow impossible even at MaxDim scale, and
+     <code>maxInt(1, …)</code> guards the floor division against degenerate zero results on
+     odd aspect ratios (an exhaustive ~43k-combination sweep during review confirmed
+     <code>fitDims</code> never exceeds its box). Geometry like this is where thumbnailers
+     quietly go wrong — <code>{"portrait-source-landscape-box", 100, 400, 100, 50, 12,
+     50}</code> pins the exact expected rounding.</p>
+
+  <h3>D4: Bilinear over NRGBA — sampling premultiplied, storing straight</h3>
+  <pre><code>dst := image.<span class="fn">NewNRGBA</span>(image.<span class="fn">Rect</span>(<span class="num">0</span>, <span class="num">0</span>, w, h))
+...
+<span class="com">// Interpolate in premultiplied space (correct for alpha compositing</span>
+<span class="com">// — translucent edges don't bleed color).</span>
+topR := lerp16(c00[<span class="num">0</span>], c10[<span class="num">0</span>], tX)
+...
+<span class="com">// Un-premultiply exactly once, into straight-alpha storage;</span>
+<span class="com">// storing the premultiplied values as-is darkened every</span>
+<span class="com">// translucent source toward black.</span>
+dst.<span class="fn">SetNRGBA</span>(x, y, color.NRGBA{
+    R: uint8(straight16(lerp16(topR, botR, tY), a16) &gt;&gt; <span class="num">8</span>),
+    ...
+})</code></pre>
+  <p>This decision exists because of a confirmed fleet finding (F1). The original code sampled
+     colors through <code>color.Color.RGBA()</code> — which legitimately returns
+     <strong>premultiplied</strong> 16-bit channels — and stored them into an
+     <code>*image.RGBA</code>, whose semantics are <strong>straight</strong> alpha. For a
+     half-transparent red <code>NRGBA{255,0,0,128}</code>, the premultiplied R≈128 got stored
+     as straight R=128: every translucent source visibly darkened toward black, and the PNG
+     round trip faithfully preserved the corruption. Opaque images were unaffected — which is
+     why the original suite stayed green while the bug shipped. The fix has two halves, and
+     both matter. <strong>Sampling stays premultiplied</strong>: interpolating straight-alpha
+     RGB across a transparent/opaque edge bleeds the transparent pixel's meaningless color
+     into the result; premultiplied interpolation is the mathematically correct compositing
+     operation. <strong>Storage becomes NRGBA</strong>: the interpolated values are
+     un-premultiplied exactly once (<code>straight16(premul, a)</code>, guarding
+     <code>a==0</code>) into straight-alpha storage, so the same bytes are never reinterpreted
+     as premultiplied again. The regression test demands bit-exact fidelity:
+     <code>NRGBA{255,0,0,128}</code> in, <code>NRGBA{255,0,0,128}</code> out, round trip
+     included.</p>
+</section>
+
+<!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">04</span>Concept Walkthroughs</h2>
+
+  <h3>Cgo call overhead — the ~nanoseconds-to-hundreds scale</h3>
+  <pre><code>rc := C.fastthumb_thumbnail((*C.uchar)(csrc), C.size_t(len(src)),
+    C.int(w), C.int(h),
+    (*C.uchar)(unsafe.Pointer(&amp;out[<span class="num">0</span>])), C.size_t(cap(out)), &amp;outLen)</code></pre>
+  <p>Every Go→C crossing costs on the order of tens to a couple hundred nanoseconds: the
+     runtime must transition off the goroutine's managed stack, save registers, and switch to
+     the C ABI (and the reverse on return). Whether that price matters depends entirely on
+     batch size. One call per <em>image</em> — milliseconds of work amortizing ~100 ns — is
+     free. One call per <em>pixel</em> — 262k crossings for a 512×512 thumbnail — turns the
+     trampoline into your profiler's hottest frame. This is why <code>thumbVIPS</code> is
+     architected as exactly ONE call: input buffer in, output buffer out, the whole
+     decode-shrink-encode pipeline living inside libvips. The transferable rule: cross the
+     boundary in coarse grains, and let the C library own the loop whenever the operation
+     allows it.</p>
+
+  <h3>Pointer-passing rules — no Go pointers into C memory</h3>
+  <pre><code><span class="com">// Pointer-passing rule #1: C memory must be allocated/owned by C.</span>
+csrc := C.CBytes(src)         <span class="com">// COPY into C-allocated memory</span>
+<span class="kw">defer</span> C.free(csrc)
+
+<span class="com">// Rule #2 (inverse): pass a *Go* pointer ONLY if C does not</span>
+<span class="com">// retain it after returning.</span>
+rc := C.fastthumb_thumbnail(..., (*C.uchar)(unsafe.Pointer(&amp;out[<span class="num">0</span>])), ...)
+runtime.<span class="fn">KeepAlive</span>(out)        <span class="com">// pin until C is done with it</span></code></pre>
+  <p>The garbage collector may move or reclaim Go memory at any time; C code has zero
+     visibility into that. Hence cgo's contract, enforced by runtime checks that crash
+     offending programs loudly. Direction one: handing C a pointer into the Go heap is legal
+     only if the memory contains no other Go pointers <em>and</em> C finishes with it before
+     the call returns — safe here because libvips writes into <code>out</code> synchronously.
+     Direction two: anything C might retain past the call must live in C-heap memory, so the
+     input bytes are copied via <code>C.CBytes</code> and freed with a matching
+     <code>defer C.free</code> — the same discipline applies to the <code>C.CString</code>
+     passed to <code>vips_init</code> in the tagged init. Finally,
+     <code>runtime.KeepAlive(out)</code> pins the staging buffer until after the last C use:
+     once the only reference has been laundered through <code>unsafe.Pointer</code>, the
+     compiler can no longer prove liveness, and without the pin the GC would be entitled to
+     collect the buffer mid-call. These four moves — copy-in, lend-out, free-everything,
+     KeepAlive — are the entire safety protocol of a production cgo binding.</p>
+
+  <h3>Build-tag mechanics — verified containment</h3>
+  <pre><code><span class="com">//go:build vips</span>
+
+$ go list -f '{{.GoFiles}} {{.IgnoredGoFiles}}' ./solution
+[fastthumb.go] [vips_binding.go]</code></pre>
+  <p>A single comment line excludes <code>vips_binding.go</code> from every build that lacks
+     <code>-tags vips</code>. The proof is mechanical, not hopeful: <code>go list</code>
+     reports the file under <code>IgnoredGoFiles</code>, so the compiler never sees it in
+     default builds, tests, vet runs, or cross-compilations — a missing system library cannot
+     break CI that never asks for it. Flip the tag on a libvips-less host and the failure is
+     equally loud and equally local: <code>fatal error: 'vips/vips.h' file not found</code>.
+     Note what the mechanism buys architecturally: both files declare <code>package
+     fastthumb</code>, so the tagged and untagged worlds present the same package API and
+     tests exercise whichever implementation is active. Build tags are usually taught as
+     platform plumbing (<code>linux</code>, <code>darwin</code>); this project shows their
+     better role as a dependency-isolation device — optional capability behind an explicit,
+     greppable switch.</p>
+
+  <h3>Cross-compilation — the CC_FOR_TARGET tax</h3>
+  <pre><code>$ GOOS=windows GOARCH=amd64 go build ./...            <span class="com"># pure Go: done</span>
+$ CC_FOR_TARGET=x86_64-w64-mingw32-gcc \
+  GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+  go build -tags vips ./...                            <span class="com"># cgo: toolchain needed</span></code></pre>
+  <p>Pure Go cross-compiles trivially — set <code>GOOS</code>/<code>GOARCH</code>, done; the
+     compiler ships with every target baked in, which is one of Go's genuine superpowers. The
+     moment <code>import "C"</code> enters the build, you need a C <em>cross-toolchain</em>
+     for each destination: a mingw-gcc for Windows targets, an osxcross wrapper plus SDK for
+     macOS, matching sysroots and libc choices (musl vs glibc) for Linux, static-linking
+     flags multiplying on top. Each target is another matrix cell someone must provision and
+     keep working. This asymmetry — not raw performance — is often what decides the
+     portability-vs-throughput question in production, and it is why fastthumb's default is
+     pure Go: ship portable by default, pay the toolchain tax only where the performance
+     genuinely demands it, and gate that payment behind a build tag so the portable path is
+     never hostage to it.</p>
+</section>
+
+<!-- ===================== 5. TESTING STRATEGY ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">05</span>Testing Strategy</h2>
+
+  <h3>All fixtures synthesized in-test — including the weapons</h3>
+  <pre><code><span class="kw">type</span> solidImage <span class="kw">struct</span> { w, h int; c color.RGBA }
+<span class="kw">func</span> (s *solidImage) At(x, y int) color.Color { <span class="kw">return</span> s.c }
+
+<span class="kw">func</span> encodePNG(t *testing.T, img image.Image) []byte { ... }</code></pre>
+  <p>No committed binaries exist anywhere in the project. Valid inputs come from a tiny
+     <code>solidImage</code> helper encoded through the real <code>png.Encode</code> /
+     <code>jpeg.Encode</code>, which makes every test self-contained and every dimension
+     pair a one-line table row. Crucially, the hostile fixtures follow the same rule:
+     <code>bombPNG</code> builds a genuine 8×8 PNG, patches its IHDR width/height fields with
+     <code>binary.BigEndian.PutUint32</code>, recomputes the CRC32 with
+     <code>hash/crc32.ChecksumIEEE</code>, and hands the result to <code>Thumb</code>. The
+     attack artifact is 300 bytes of test code — reproducible forever, unlike a checked-in
+     binary nobody dares regenerate.</p>
+
+  <h3>The bomb regression: rejection measured in ~0 ms</h3>
+  <pre><code>start := time.<span class="fn">Now</span>()
+_, err := Thumb(bomb, <span class="num">64</span>, <span class="num">64</span>)
+elapsed := time.<span class="fn">Since</span>(start)
+<span class="kw">if</span> !errorsIs(err, ErrBadDims) { ... }
+<span class="kw">if</span> elapsed &gt; <span class="num">900</span>*time.Millisecond {
+    t.Fatalf(<span class="str">"bomb took %v to reject — full decode ran before the header check"</span>, elapsed)
+}</code></pre>
+  <p>Finding A1's fix is pinned by a test that asserts two independent properties. First, the
+     error identity: the crafted-IHDR bomb (tested at both <code>MaxSrcDim+10000</code> per
+     side and the sneakier <code>20000×4000</code>, which passes per-side checks but blows
+     the pixel budget) must wrap <code>ErrBadDims</code>. Second, the timing: a wall-clock
+     bound generous enough to be stable on loaded CI machines, tight enough to catch a
+     regression that lets <code>png.Decode</code> allocate gigabytes — because the original
+     bug wasn't a wrong answer, it was a <em>13.7 GiB pause</em> before the wrong answer.
+     Timing assertions are rare in unit tests and justified exactly when latency IS the
+     behavior being specified.</p>
+
+  <h3>The translucency regression: NRGBA{255,0,0,128} end to end</h3>
+  <pre><code>nc := color.NRGBAModel.Convert(resized.At(x, y)).(color.NRGBA)
+<span class="kw">if</span> nc != (color.NRGBA{R: <span class="num">255</span>, G: <span class="num">0</span>, B: <span class="num">0</span>, A: <span class="num">128</span>}) { ... }</code></pre>
+  <p>Finding F1 gets an equally sharp pin. The subtlety is in the assertion itself:
+     <code>.RGBA()</code> legitimately reports <em>premultiplied</em> channels, so checking
+     through it could mask a storage bug. The test converts through
+     <code>NRGBAModel</code> to read back exactly what is <em>stored</em> — demanding
+     bit-exact <code>NRGBA{255,0,0,128}</code> at every output pixel of a resized
+     half-transparent-red field, then repeating the check after a full
+     encode→decode PNG round trip. Any relapse into storing premultiplied values as straight
+     (red decaying to R=128) fails instantly. Alongside it, the suite covers the rest of the
+     contract surface: the format-sniffing table (empty, garbage, truncated PNG header,
+     GIF-magic rejection), nine-row aspect-fit geometry including the no-upscale cases,
+     solid-color invariance within ±2/65535, JPEG→JPEG retention, all six error-path corners,
+     and sentinel reachability via <code>errors.Is</code>.</p>
+
+  <h3>Race-clean and convention-clean</h3>
+  <div class="callout">
+    <p><strong>The note:</strong> the whole suite runs under <code>go test -race
+       ./solution/...</code> per repo convention, and root stubs stay failing-by-design —
+       the executable specification lives in the unimplemented stubs until someone writes
+       the real thing.</p>
+  </div>
+  <p>Even though fastthumb is single-goroutine, the race detector earns its keep by validating
+     the memory discipline around the cgo-shaped code paths and keeping the project uniform
+     with the concurrency-heavy siblings in this curriculum. The adversarial fleet's abuse
+     probes (nil/empty/magic-only/truncated inputs under watchdogs with MemStats deltas) all
+     came back clean post-fix: prompt errors wrapping the right sentinel, zero allocation
+     spikes, no panics, no out-of-bounds reads — the hostile-input surface behaves exactly
+     as NF-level promises require.</p>
+</section>
+
+<!-- ===================== 6. GO IN THE WILD ===================== -->
+<section class="reveal">
+  <h2><span class="sec-num">06</span>Go in the Wild</h2>
+
+  <div class="sidebar">
+    <h3>Where this stack runs in production</h3>
+    <p>The cgo boundary you met here — and the decision about whether to cross it at all —
+       shapes large parts of the Go ecosystem:</p>
+    <ul>
+      <li><strong>libvips bindings: <code>govips</code> and <code>bimg</code></strong> — the
+          production answer to exactly fastthumb's problem. Both wrap libvips for
+          high-throughput image services (bimg famously powered resize infrastructure serving
+          billions of images); both carry the same machinery you just wrote —
+          <code>C.CBytes</code> copies in, staged or C-owned buffers out, KeepAlive pins —
+          and both inherit the same cross-compilation tax. Teams choose them when JPEG
+          shrink-on-load throughput justifies a C dependency per deploy target.</li>
+      <li><strong>SQLite drivers: <code>mattn/go-sqlite3</code> vs
+          <code>modernc.org/sqlite</code></strong> — the ecosystem's clearest
+          pure-Go-vs-cgo fork of the same tradeoff. mattn's driver wraps the C amalgamation
+          (battle-tested, fastest, needs a C toolchain everywhere it deploys); modernc
+          transpiled the whole engine to Go (slower, but <code>CGO_ENABLED=0</code>
+          everywhere). Whole companies standardize on one side purely for build-pipeline
+          reasons — the portability half of this project's tier decision, at industrial
+          scale.</li>
+      <li><strong>Docker's runc and container runtimes</strong> — heavy cgo consumers for
+          namespaces, cgroups, and system calls via C libraries where stable low-level
+          interfaces matter, while carefully keeping the hot paths native. Their build docs
+          spend more words on cross-toolchains than on Go itself — the CC_FOR_TARGET story,
+          lived daily.</li>
+      <li><strong>The counter-example: <code>golang/freetype</code></strong> — font rasterization
+          implemented in pure Go, proving that imaging-grade pixel work is achievable without
+          leaving the language when throughput targets allow. fastthumb's pure-Go default sits
+          in this tradition: the stdlib <code>image</code> stack powers plenty of real
+          thumbnail pipelines that never compiled a line of C.</li>
+    </ul>
+  </div>
+
+  <h3>Why the boundary stays worth learning</h3>
+  <ol>
+    <li><strong>Some capabilities only exist on the far side.</strong> Hardware codecs,
+        decades-old battle-tested C engines (libvips, sqlite, openssl), platform APIs without
+        Go wrappers — sooner or later a Go service needs one, and the difference between a
+        working binding and a corrupted heap is precisely the pointer-passing protocol this
+        project drills.</li>
+    <li><strong>The cost model prevents cargo-culting.</strong> Knowing that a crossing costs
+        ~100 ns tells you immediately that per-image batching is free and per-pixel calls are
+        ruinous — the same arithmetic that made "one call per thumbnail" the obvious
+        architecture here decides real integration designs.</li>
+    <li><strong>The opt-in pattern scales to whole platforms.</strong> Build tags isolating an
+        expensive capability behind an explicit switch is how ecosystems offer both worlds
+        without taxing everyone — the same shape as <code>-tags</code> variants, driver forks,
+        and pure-Go fallbacks you'll meet throughout production Go.</li>
+  </ol>
+  <p>The through-line: fastthumb teaches both halves of an honest engineering decision —
+     what the C boundary costs (call overhead, pointer discipline, toolchains) and what the
+     pure-Go path delivers (portability, simplicity, adequate speed) — by building both and
+     letting the build tag draw the line.</p>
+</section>
+
+</main>
+
+<footer>
+  <a class="btn" href="13-perfhunt.html">&larr; Previous: perfhunt</a>
+  <span style="color: var(--muted); font-size: 0.85rem;">Go101 · Project 14 of 16</span>
+  <a class="btn" href="15-raftling.html">Next: raftling &rarr;</a>
+</footer>
+
+<script>
+(function () {
+  var sections = document.querySelectorAll('section.reveal');
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(function (s) { s.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+  sections.forEach(function (s) { io.observe(s); });
+})();
+</script>
+
+</body>
+</html>
