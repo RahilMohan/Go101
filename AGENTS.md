@@ -46,6 +46,9 @@ projects/NN-<slug>/solution/  # reference solution, own package
    STOP and report status to the user. Only after explicit user approval,
    dispatch adversarial review agents on the branch diff, fix confirmed
    findings inside the same branch, then merge.
+4. **Update documentation** — after every adversarial review session,
+   update `docs/NN-<slug>.html` to match any code changes and confirmed
+   doc findings (same branch, own commit), before merging.
 
 ## Agent Orchestration
 Follow the pipeline in `design.md` → Agent Orchestration:
