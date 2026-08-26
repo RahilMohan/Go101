@@ -31,12 +31,26 @@ import (
 // rejected (a thumbnailer should never be handed "shrink to 100000px").
 const MaxDim = 8192
 
+// MaxSrcDim bounds any single dimension of a DECODED SOURCE image.
+// Sources whose headers declare larger dimensions are rejected at the
+// header-peek stage, BEFORE any bitmap allocation — Go's PNG decoder
+// sizes its buffers from the declared header, so an unbounded decode
+// turns a few hundred attacker-chosen bytes into gigabytes of RAM
+// (a decompression bomb).
+const MaxSrcDim = 20000
+
+// maxSrcPixels caps the total declared source pixel count (~256 MiB
+// of RGBA), catching wide-but-short or tall-but-narrow bombs that fit
+// under MaxSrcDim on each side individually.
+const maxSrcPixels = 1 << 26
+
 // ErrBadFormat is returned (wrapped) when src is not decodable as PNG
 // or JPEG — corrupt data, truncated headers, or an unsupported format.
 var ErrBadFormat = errors.New("fastthumb: unknown or corrupt image format")
 
 // ErrBadDims is returned (wrapped) for non-positive or oversized
-// target dimensions.
+// target dimensions, or a decoded source exceeding the
+// MaxSrcDim/maxSrcPixels budget.
 var ErrBadDims = errors.New("fastthumb: invalid dimensions")
 
 var pngMagic = []byte("\x89PNG\r\n\x1a\n")
@@ -59,6 +73,19 @@ func Format(src []byte) (string, error) {
 func rgba16(c color.Color) [4]uint32 {
 	r, g, b, a := c.RGBA()
 	return [4]uint32{r, g, b, a}
+}
+
+// straight16 converts a premultiplied 16-bit channel value back to
+// straight alpha; a fully transparent pixel contributes no color.
+func straight16(premul, a uint32) uint32 {
+	if a == 0 {
+		return 0
+	}
+	v := premul * 65535 / a
+	if v > 65535 {
+		return 65535
+	}
+	return v
 }
 
 func minInt(a, b int) int {
@@ -94,9 +121,13 @@ func fitDims(w, h, maxW, maxH int) (int, int) {
 
 // Resize scales src to exactly w x h with bilinear interpolation,
 // sampling source pixel centers so output pixels map symmetrically to
-// source space. Output is *image.RGBA regardless of src's color model.
+// source space. Output is *image.NRGBA regardless of src's color
+// model: sampling happens in premultiplied space, and the result is
+// un-premultiplied once, into straight-alpha storage — writing into
+// *image.RGBA instead would reinterpret the same bytes as
+// premultiplied again and darken translucent sources.
 func Resize(src image.Image, w, h int) image.Image {
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	dst := image.NewNRGBA(image.Rect(0, 0, w, h))
 	b := src.Bounds()
 	sw := b.Dx()
 	sh := b.Dy()
@@ -122,13 +153,27 @@ func Resize(src image.Image, w, h int) image.Image {
 			c01 := rgba16(src.At(b.Min.X+x0, b.Min.Y+y1))
 			c11 := rgba16(src.At(b.Min.X+x1, b.Min.Y+y1))
 
-			var out [4]uint8
-			for ch := 0; ch < 4; ch++ {
-				top := lerp16(c00[ch], c10[ch], tX)
-				bot := lerp16(c01[ch], c11[ch], tX)
-				out[ch] = uint8(lerp16(top, bot, tY) >> 8)
-			}
-			dst.SetRGBA(x, y, color.RGBA{R: out[0], G: out[1], B: out[2], A: out[3]})
+			// Interpolate in premultiplied space (correct for alpha
+			// compositing — translucent edges don't bleed color).
+			topR := lerp16(c00[0], c10[0], tX)
+			topG := lerp16(c00[1], c10[1], tX)
+			topB := lerp16(c00[2], c10[2], tX)
+			topA := lerp16(c00[3], c10[3], tX)
+			botR := lerp16(c01[0], c11[0], tX)
+			botG := lerp16(c01[1], c11[1], tX)
+			botB := lerp16(c01[2], c11[2], tX)
+			botA := lerp16(c01[3], c11[3], tX)
+			a16 := lerp16(topA, botA, tY)
+
+			// Un-premultiply exactly once, into straight-alpha
+			// storage; storing the premultiplied values as-is
+			// darkened every translucent source toward black.
+			dst.SetNRGBA(x, y, color.NRGBA{
+				R: uint8(straight16(lerp16(topR, botR, tY), a16) >> 8),
+				G: uint8(straight16(lerp16(topG, botG, tY), a16) >> 8),
+				B: uint8(straight16(lerp16(topB, botB, tY), a16) >> 8),
+				A: uint8(a16 >> 8),
+			})
 		}
 	}
 	return dst
@@ -150,11 +195,24 @@ func maxFloat(a, b float64) float64 {
 }
 
 // decode sniffs the format and decodes accordingly; the returned name
-// is the format to re-encode as.
+// is the format to re-encode as. Before any full decode, the header
+// dimensions are peeked via image.DecodeConfig and checked against
+// MaxSrcDim/maxSrcPixels — a decoder would otherwise allocate the full
+// bitmap straight from attacker-controlled header values.
 func decode(src []byte) (image.Image, string, error) {
 	format, err := Format(src)
 	if err != nil {
 		return nil, "", err
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(src))
+	if err != nil {
+		return nil, "", fmt.Errorf("fastthumb: %w: %v", ErrBadFormat, err)
+	}
+	if cfg.Width > MaxSrcDim || cfg.Height > MaxSrcDim ||
+		int64(cfg.Width)*int64(cfg.Height) > maxSrcPixels {
+		return nil, "", fmt.Errorf(
+			"fastthumb: source %dx%d exceeds budget (%d per side, %d pixels): %w",
+			cfg.Width, cfg.Height, MaxSrcDim, maxSrcPixels, ErrBadDims)
 	}
 	r := bytes.NewReader(src)
 	var img image.Image

@@ -26,6 +26,11 @@ import (
 // rejected (a thumbnailer should never be handed "shrink to 100000px").
 const MaxDim = 8192
 
+// MaxSrcDim bounds any single dimension of a decoded SOURCE image;
+// sources declaring larger dimensions must be rejected from their
+// headers, before any bitmap allocation (decompression-bomb defense).
+const MaxSrcDim = 20000
+
 // ErrBadFormat is returned (wrapped) when src is not decodable as PNG
 // or JPEG — corrupt data, truncated headers, or an unsupported format.
 var ErrBadFormat = errors.New("fastthumb: unknown or corrupt image format")

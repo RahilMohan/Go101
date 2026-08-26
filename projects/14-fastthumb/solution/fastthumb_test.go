@@ -2,12 +2,15 @@ package fastthumb
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -234,5 +237,98 @@ func TestThumbErrors(t *testing.T) {
 func TestSentinelIdentity(t *testing.T) {
 	if _, err := Format([]byte("junk")); !errorsIs(err, ErrBadFormat) {
 		t.Errorf("Format junk: err = %v, want errors.Is(err, ErrBadFormat)", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Regression: fleet round-1 findings (F1 translucency, A1 bomb)
+// ---------------------------------------------------------------------------
+
+// TestResizeTranslucentSourceFidelity pins F1: channels are SAMPLED
+// premultiplied but STORED straight-alpha, so a translucent source
+// keeps its color after resampling instead of darkening toward black.
+func TestResizeTranslucentSourceFidelity(t *testing.T) {
+	src := image.NewNRGBA(image.Rect(0, 0, 7, 7))
+	red128 := color.NRGBA{R: 255, G: 0, B: 0, A: 128}
+	for y := 0; y < 7; y++ {
+		for x := 0; x < 7; x++ {
+			src.SetNRGBA(x, y, red128)
+		}
+	}
+	resized := Resize(src, 5, 5)
+	if resized == nil {
+		t.Fatal("Resize returned nil")
+	}
+	for y := 0; y < 5; y++ {
+		for x := 0; x < 5; x++ {
+			// .RGBA() legitimately reports premultiplied channels;
+			// compare STRAIGHT stored values via NRGBAModel.
+			nc := color.NRGBAModel.Convert(resized.At(x, y)).(color.NRGBA)
+			if nc != (color.NRGBA{R: 255, G: 0, B: 0, A: 128}) {
+				t.Fatalf("At(%d,%d) = NRGBA{%d,%d,%d,%d}, want NRGBA{255,0,0,128}",
+					x, y, nc.R, nc.G, nc.B, nc.A)
+			}
+		}
+	}
+
+	// PNG round-trip must preserve fidelity too.
+	out, err := Thumb(encodePNG(t, src), 5, 5)
+	if err != nil {
+		t.Fatalf("Thumb: %v", err)
+	}
+	img, err := png.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("output not decodable PNG: %v", err)
+	}
+	// Check STRAIGHT values: .RGBA() legitimately reports premultiplied
+	// channels, so convert through NRGBAModel to see what is stored.
+	nc := color.NRGBAModel.Convert(img.At(2, 2)).(color.NRGBA)
+	if nc.R != 255 || nc.G != 0 || nc.B != 0 || nc.A != 128 {
+		t.Errorf("after PNG round-trip: NRGBA{%d,%d,%d,%d}, want NRGBA{255,0,0,128}",
+			nc.R, nc.G, nc.B, nc.A)
+	}
+}
+
+// bombPNG patches the IHDR of a small valid PNG to declare w×h pixels
+// while keeping only ~a few hundred bytes of real IDAT payload — a
+// classic decompression-bomb fixture, synthesized in-test (no
+// committed binaries).
+func bombPNG(t *testing.T, w, h uint32) []byte {
+	t.Helper()
+	base := encodePNG(t, &solidImage{8, 8, color.RGBA{255, 0, 0, 255}})
+	bomb := append([]byte(nil), base...)
+	const ihdr = 8 // PNG signature length; chunk length field follows
+	binary.BigEndian.PutUint32(bomb[ihdr+8:], w)
+	binary.BigEndian.PutUint32(bomb[ihdr+12:], h)
+	crc := crc32.ChecksumIEEE(bomb[ihdr+4 : ihdr+21]) // "IHDR" + 13 data bytes
+	binary.BigEndian.PutUint32(bomb[ihdr+21:], crc)
+	return bomb
+}
+
+// TestThumbRejectsDecompressionBomb pins A1: a source whose HEADER
+// declares enormous dimensions must be rejected at the DecodeConfig
+// peek, before any full-decode bitmap allocation — quickly and with an
+// ErrBadDims wrap.
+func TestThumbRejectsDecompressionBomb(t *testing.T) {
+	tests := []struct {
+		name string
+		w, h uint32
+	}{
+		{"huge-square-over-maxsrcdim", MaxSrcDim + 10000, MaxSrcDim + 10000},
+		{"within-maxsrcdim-over-pixel-budget", 20000, 4000},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bomb := bombPNG(t, tt.w, tt.h)
+			start := time.Now()
+			_, err := Thumb(bomb, 64, 64)
+			elapsed := time.Since(start)
+			if !errorsIs(err, ErrBadDims) {
+				t.Fatalf("error = %v, want wrap of ErrBadDims", err)
+			}
+			if elapsed > 900*time.Millisecond {
+				t.Fatalf("bomb took %v to reject — full decode ran before the header check", elapsed)
+			}
+		})
 	}
 }

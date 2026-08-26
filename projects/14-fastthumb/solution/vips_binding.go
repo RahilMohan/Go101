@@ -29,7 +29,13 @@ import (
 // register a shutdown hook (C.vips_shutdown) via runtime.AddCleanup
 // or an explicit Close — omitted here for brevity in a teaching stub.
 func init() {
-	if err := C.vips_init(C.CString("fastthumb")); err != 0 {
+	// C.CString allocates from the C heap; ownership passes to C, so we
+	// must free it ourselves (leaking here is one-time, but teaching
+	// code should model the discipline: every C-heap alloc gets a
+	// matching free).
+	name := C.CString("fastthumb")
+	defer C.free(unsafe.Pointer(name))
+	if err := C.vips_init(name); err != 0 {
 		panic(fmt.Sprintf("fastthumb: vips_init failed: %d", int(err)))
 	}
 }
@@ -40,6 +46,9 @@ func init() {
 // JPEGs this beats any pure-Go path because JPEG entropy decoding can
 // be skipped for most scanlines during shrink-on-load.
 func thumbVIPS(src []byte, w, h int) ([]byte, error) {
+	if w <= 0 || h <= 0 || w > MaxDim || h > MaxDim {
+		return nil, fmt.Errorf("fastthumb(vips): dims %dx%d outside [1,%d]: %w", w, h, MaxDim, ErrBadDims)
+	}
 	if len(src) == 0 {
 		return nil, fmt.Errorf("fastthumb(vips): %w", ErrBadFormat)
 	}
@@ -53,7 +62,16 @@ func thumbVIPS(src []byte, w, h int) ([]byte, error) {
 	// into a C call ONLY if C does not retain it after returning.
 	// Here C writes into our buffer and finishes before the call
 	// returns, so &out[0] is legal.
-	out := make([]byte, w*h*4)
+	//
+	// Sizing: fastthumb_thumbnail returns ENCODED PNG bytes, and an
+	// encoded image routinely EXCEEDS the raw-pixel floor w*h*4 (filter
+	// bytes per row, zlib framing, chunk tables). Staging exactly
+	// w*h*4 — as earlier revisions did — guaranteed truncation for
+	// realistic outputs, so stage the raw-pixel floor plus slack and
+	// fail loudly below if C needed more. A production binding would
+	// instead let C own the output buffer and hand back ptr+len.
+	const pngSlack = 1 << 20 // worst-case framing overhead for thumbnails
+	out := make([]byte, w*h*4+pngSlack)
 
 	var outLen C.size_t
 	rc := C.fastthumb_thumbnail((*C.uchar)(csrc), C.size_t(len(src)),
@@ -63,6 +81,10 @@ func thumbVIPS(src []byte, w, h int) ([]byte, error) {
 		return nil, fmt.Errorf("fastthumb(vips): operation failed (%d)", int(rc))
 	}
 	runtime.KeepAlive(out) // pin until C is done with it
+	if int64(outLen) > int64(len(out)) {
+		return nil, fmt.Errorf("fastthumb(vips): output %d bytes exceeds staged buffer of %d",
+			int64(outLen), len(out))
+	}
 	return out[:int(outLen)], nil
 }
 
@@ -71,15 +93,15 @@ func thumbVIPS(src []byte, w, h int) ([]byte, error) {
 func Resize(src image.Image, w, h int) image.Image {
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, src); err != nil {
-		return image.NewRGBA(image.Rect(0, 0, w, h))
+		return image.NewNRGBA(image.Rect(0, 0, w, h))
 	}
 	out, err := thumbVIPS(buf.Bytes(), w, h)
 	if err != nil {
-		return image.NewRGBA(image.Rect(0, 0, w, h))
+		return image.NewNRGBA(image.Rect(0, 0, w, h))
 	}
 	img, err := png.Decode(bytes.NewReader(out))
 	if err != nil {
-		return image.NewRGBA(image.Rect(0, 0, w, h))
+		return image.NewNRGBA(image.Rect(0, 0, w, h))
 	}
 	return img
 }
