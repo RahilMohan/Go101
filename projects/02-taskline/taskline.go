@@ -30,7 +30,14 @@ type Task struct {
 // ErrNotFound is returned when an operation references an unknown task ID.
 var ErrNotFound = errors.New("taskline: task not found")
 
-// Store persists tasks as a JSON array in a single file.
+// ErrNullElement is returned by List when the store file is a JSON array
+// containing null elements, which would otherwise decode into phantom
+// zero-value tasks.
+var ErrNullElement = errors.New("taskline: store contains null array element")
+
+// Store persists tasks as a JSON array in a single file. Concurrent
+// multi-process use is last-writer-wins; a single writer per file is
+// assumed.
 type Store struct {
 	path string // TODO: Implement
 }

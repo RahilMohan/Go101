@@ -36,10 +36,17 @@ type Task struct {
 // ErrNotFound is returned when an operation references an unknown task ID.
 var ErrNotFound = errors.New("taskline: task not found")
 
+// ErrNullElement is returned by List when the store file is a JSON array
+// containing null elements, which would otherwise decode into phantom
+// zero-value tasks.
+var ErrNullElement = errors.New("taskline: store contains null array element")
+
 // Store persists tasks as a JSON array in a single file. Every mutation
 // rewrites the whole file atomically: the new content is written to a temp
 // file in the same directory, flushed, and renamed over the target, so a
 // crash mid-write never leaves a truncated or half-updated store behind.
+// Concurrent multi-process use is last-writer-wins: a single writer per
+// file is assumed.
 type Store struct {
 	path string
 }
@@ -55,7 +62,9 @@ func OpenStore(path string) (*Store, error) {
 
 // List returns all tasks. A missing or empty file yields an empty (non-nil)
 // slice. A corrupt file yields an error wrapping the decode failure — it
-// never panics and never silently drops data.
+// never panics and never silently drops data. A well-formed JSON array that
+// contains null elements also yields an error wrapping ErrNullElement,
+// rather than decoding them into phantom zero-value tasks.
 func (s *Store) List() ([]Task, error) {
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -67,12 +76,20 @@ func (s *Store) List() ([]Task, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
 		return []Task{}, nil
 	}
-	var tasks []Task
-	if err := json.Unmarshal(data, &tasks); err != nil {
+	var elements []json.RawMessage
+	if err := json.Unmarshal(data, &elements); err != nil {
 		return nil, fmt.Errorf("taskline: decode %s: %w", s.path, err)
 	}
-	if tasks == nil {
-		tasks = []Task{}
+	tasks := make([]Task, 0, len(elements))
+	for i, el := range elements {
+		if bytes.Equal(bytes.TrimSpace(el), []byte("null")) {
+			return nil, fmt.Errorf("taskline: decode %s: element %d: %w", s.path, i, ErrNullElement)
+		}
+		var t Task
+		if err := json.Unmarshal(el, &t); err != nil {
+			return nil, fmt.Errorf("taskline: decode %s: element %d: %w", s.path, i, err)
+		}
+		tasks = append(tasks, t)
 	}
 	return tasks, nil
 }

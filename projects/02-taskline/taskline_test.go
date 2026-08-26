@@ -215,6 +215,18 @@ func TestCorruptFileErrorsOnList(t *testing.T) {
 	}
 }
 
+func TestNullArrayElementErrorsOnList(t *testing.T) {
+	s, path := mustOpen(t)
+	content := `[{"id":1,"title":"real","status":"todo","created_at":"2024-01-01T00:00:00Z"},null]`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+	got, err := s.List()
+	if !errors.Is(err, ErrNullElement) {
+		t.Fatalf("List() on [task,null] = %+v, err = %v, want errors.Is(err, ErrNullElement)", got, err)
+	}
+}
+
 func TestDoneAtLifecycle(t *testing.T) {
 	s, _ := mustOpen(t)
 	task, err := s.Add("finish report")
