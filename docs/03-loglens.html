@@ -381,8 +381,12 @@
      silent non-match that masquerades as "skipped."</p>
 
   <h3>D2: Raise the Scanner buffer — or lose lines silently</h3>
-  <pre><code>sc := bufio.<span class="fn">NewScanner</span>(r)
-sc.<span class="fn">Buffer</span>(<span class="fn">make</span>([]<span class="typ">byte</span>, <span class="num">64</span>*<span class="num">1024</span>), maxLineSize) <span class="com">// maxLineSize = 1024 * 1024</span></code></pre>
+  <pre><code><span class="com">// maxLineSize raises the Scanner limit so long URLs in real logs are not
+// dropped with bufio.ErrTooLong (the default cap is 64KB).</span>
+<span class="kw">const</span> maxLineSize = <span class="num">1024</span> * <span class="num">1024</span>
+
+sc := bufio.<span class="fn">NewScanner</span>(r)
+sc.<span class="fn">Buffer</span>(<span class="fn">make</span>([]<span class="typ">byte</span>, <span class="num">64</span>*<span class="num">1024</span>), maxLineSize)</code></pre>
   <p>The Scanner's default limit is 64KB per token. Exceed it and <code>sc.Scan()</code> returns
      false with <code>bufio.ErrTooLong</code> — which, fatally, looks exactly like clean
      end-of-input if you don't check <code>sc.Err()</code>. Real access logs contain URLs far past
@@ -394,7 +398,10 @@ sc.<span class="fn">Buffer</span>(<span class="fn">make</span>([]<span class="ty
      <code>if err := sc.Err(); err != nil</code> check so I/O trouble becomes a returned error
      instead of truncated results. This pitfall is why the test suite includes an ~800KB line: it
      proves the limit was raised and proves the implementation didn't take the
-     "silently stop early" exit.</p>
+     "silently stop early" exit. One operational consequence worth stating plainly: a
+     <em>single</em> line over this limit aborts that file's entire analysis with
+     <code>ErrTooLong</code>, which <code>main</code> maps to exit code 1 — there is no
+     skip-and-continue for oversized lines, by design.</p>
 
   <h3>D3: Partial-stats-on-error contract</h3>
   <pre><code>status, err := strconv.<span class="fn">Atoi</span>(m[6])
@@ -449,6 +456,14 @@ sc.<span class="fn">Buffer</span>(<span class="fn">make</span>([]<span class="ty
      report; anything else (unreadable file, scanner failure) exits 1. Same
      library-plus-cmd layout as projects 01 and 02 — by now it should feel like the default shape
      of a Go tool.</p>
+  <div class="callout">
+    <p><strong>Caveat — terminal injection:</strong> <code>Path</code> values are printed raw to
+       stdout, unescaped. Log paths can contain arbitrary bytes, including ANSI escape sequences,
+       which pass straight through to the terminal — the same exposure class as
+       <code>wc</code>-family tools. Be deliberate about pointing the tool at untrusted logs in an
+       interactive terminal; pipe through a sanitizer or view with escapes disabled if that
+       matters in your environment.</p>
+  </div>
 </section>
 
 <!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
@@ -551,6 +566,15 @@ stats.ByPath[m[5]]++</code></pre>
      path-asc tie-break, clamp to <code>n</code>. The tie-break isn't cosmetic: without it, equal
      counts would shuffle between runs, making output non-reproducible and any golden-file testing
      impossible. Determinism is a feature you opt into with a comparator.</p>
+  <div class="callout">
+    <p><strong>Known limitation — unbounded map growth:</strong> <code>ByPath</code> and
+       <code>ByStatus</code> gain one entry per distinct key and are never evicted. On
+       high-cardinality hostile input (e.g., URLs made unique per request), measured memory
+       amplification is roughly <strong>8&times;</strong> the input's size. This is an accepted
+       trade-off for the project's scope — trusted, single-file analysis of ordinary access logs
+       — and there is deliberately no built-in cap. Bounding the maps (sampling, a count-min
+       sketch, or top-K eviction) is left as a learner extension exercise.</p>
+  </div>
 </section>
 
 <!-- ===================== 5. TESTING STRATEGY ===================== -->
@@ -568,7 +592,9 @@ stats.ByPath[m[5]]++</code></pre>
 <span class="kw">if</span> le.Line != <span class="num">4</span> {
     t.<span class="fn">Errorf</span>(<span class="str">"LineError.Line = %d, want 4"</span>, le.Line)
 }
-<span class="kw">if</span> stats.Total != <span class="num">2</span> || stats.Skipped != <span class="num">1</span> { <span class="com">/* partial stats required */</span> }</code></pre>
+<span class="kw">if</span> stats.Total != <span class="num">2</span> || stats.Skipped != <span class="num">1</span> {
+    t.<span class="fn">Errorf</span>(<span class="str">"partial stats Total/Skipped = %d/%d, want 2/1"</span>, stats.Total, stats.Skipped)
+}</code></pre>
   <p>The assertions interlock: stats must be <em>non-nil</em> alongside the error (the
      partial-stats contract), totals must reflect exactly the two lines parsed before the
      failure, the blank line must count as skipped, and the reported line number must be the
@@ -589,7 +615,7 @@ line := fmt.<span class="fn">Sprintf</span>(<span class="str">"1.2.3.4 - - [t] \
 
   <h3>Sentinel assertions via errors.Is / errors.As</h3>
   <pre><code><span class="kw">if</span> !errors.<span class="fn">Is</span>(err, ErrMalformed) {
-    t.<span class="fn">Errorf</span>(<span class="str">"errors.Is(err, ErrMalformed) = false through LineError chain"</span>)
+    t.<span class="fn">Errorf</span>(<span class="str">"errors.Is(err, ErrMalformed) = false through LineError chain; err = %v"</span>, err)
 }</code></pre>
   <p>Like taskline before it, the suite demands wrapping discipline, not just error presence: the
      assertion passes only if <code>%w</code> wiring connects the returned error to the sentinel
