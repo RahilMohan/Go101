@@ -340,9 +340,10 @@
         (256-capacity) subscriber receive all 100, the starved subscriber receives at most its
         buffer, <code>Unsubscribe</code> doesn't deadlock afterward, and the hub still delivers
         the next message.</li>
-    <li><strong>R4 — Graceful shutdown.</strong> Every client gets a &ldquo;* server shutting down,
-        goodbye&rdquo; system line followed by EOF; <code>Serve</code> returns nil;
-        <code>Shutdown</code> returns nil within the caller's context.</li>
+    <li><strong>R4 — Graceful shutdown (best-effort).</strong> Every <em>drainable</em> client gets a &ldquo;* server shutting down,
+        goodbye&rdquo; system line followed by EOF; <code>Serve</code> returns nil
+        (or <code>net.ErrClosed</code> if <code>Shutdown</code> raced <code>Listen</code>);
+        <code>Shutdown</code> returns nil within the caller's context. Clients whose 64-slot write queue is full at shutdown time miss the goodbye (it is dropped with a log) — the guarantee is best-effort under backpressure.</li>
     <li><strong>R5 — Shutdown is idempotent-by-error.</strong> A second <code>Shutdown</code>
         call returns an error wrapping <code>net.ErrClosed</code> rather than panicking or
         double-closing channels.</li>
@@ -363,8 +364,9 @@
   <h3>Non-functional</h3>
   <ul>
     <li><strong>NF1 — Bounded resources everywhere.</strong> Per-client write queues cap at 64
-        slots; the hub's inbound queue caps at 256 events; goroutines scale with connections,
-        never with message volume.</li>
+        slots; the hub's inbound queue caps at 256 events; wire lines cap at 4 MiB and
+        concurrent connections at 1000; goroutines scale with connections,
+        never with message volume. An idle registered connection is disconnected after 60s (handshake 30s) to bound slowloris holds.</li>
     <li><strong>NF2 — No lock contention on the hot path.</strong> Message routing touches no
         mutexes; the two mutexes that exist guard the listener state and the live-connection
         tracking set at their edges.</li>
@@ -510,19 +512,19 @@ s.wg.<span class="fn">Add</span>(<span class="num">1</span>)
      the &ldquo;close everything, twice is fine&rdquo; pattern is safe here.</p>
 
   <h3>D6: The shutdown sequence</h3>
-  <pre><code>ln.Close()       <span class="com">→ Accept returns net.ErrClosed → Serve returns nil</span>
+   <pre><code>ln.Close()       <span class="com">→ Accept returns net.ErrClosed → Serve returns nil (or nil if raced Listen)</span>
 close(s.stopCh)  <span class="com">→ hub exits its select loop…</span>
-finalize         <span class="com">→ goodbye line queued per client, then close(c.out)</span>
-                 <span class="com">→ subscriber channels closed → close(s.hubDone)</span>
+finalize         <span class="com">→ goodbye best-effort per client (drop+log if queue full), then close(c.out)</span>
+                  <span class="com">→ subscriber channels closed → close(s.hubDone)</span>
 writers          <span class="com">→ range c.out ends → drain → conn.Close() → wg.Done()</span>
 doneCh watcher   <span class="com">→ wg.Wait() returns → close(doneCh)</span>
 Shutdown         <span class="com">→ &lt;-doneCh ⇒ return nil | &lt;-ctx.Done() ⇒ forceClose, return ctx.Err()</span></code></pre>
   <p>Graceful shutdown is choreography, and each arrow above is a synchronization edge some
      goroutine is waiting on. Closing the listener unblocks <code>Serve</code> first so no
      new clients arrive mid-teardown. <code>stopCh</code> tells the hub to run finalize,
-     which queues the goodbye and then closes each <code>out</code> channel — the close is
-     what releases every writer's <code>range</code>, letting each drain whatever remains
-     before closing its own conn and calling <code>wg.Done()</code>. A dedicated watcher
+      which best-effort queues the goodbye (dropped with a log if the client's 64-slot queue is full — R4 is best-effort under backpressure) and then closes each <code>out</code> channel — the close is
+      what releases every writer's <code>range</code>, letting each drain whatever remains
+      before closing its own conn and calling <code>wg.Done()</code>. A dedicated watcher
      goroutine turns &ldquo;hub finished <em>and</em> all writers exited&rdquo; into the single
      <code>doneCh</code> signal <code>Shutdown</code> waits on. And the deadline arms the
      escape hatch: if politeness takes too long, force-close kills the stragglers and the
@@ -556,9 +558,9 @@ Shutdown         <span class="com">→ &lt;-doneCh ⇒ return nil | &lt;-ctx.Don
      <code>Accept</code> wakes with an error satisfying
      <code>errors.Is(err, net.ErrClosed)</code> — distinguishing &ldquo;we're stopping&rdquo; from
      &ldquo;something broke&rdquo; is what lets Serve return nil on purposeful close. Conns carry
-     deadlines as their universal interrupt: <code>SetReadDeadline</code> bounds the silent
-     handshake window (60 seconds here, so pre-registration conns can't linger forever), and
-     is then cleared with <code>time.Time{}</code> so registered users may idle indefinitely.
+      deadlines as their universal interrupt: <code>SetReadDeadline</code> bounds the silent
+      handshake window (30s here, so pre-registration conns can't linger forever), and
+      registered readers reset an idle deadline (60s per line) so idle peers are eventually reaped — together with a 1000-connection cap this bounds slowloris and FD exhaustion.
      Most importantly, <code>conn.Close()</code> works from <em>another goroutine</em>: it's
       how the hub evicts a slow client and how force-close unblocks wedged writers — which is
       why &ldquo;who may close, and when&rdquo; must be answered explicitly rather than left to

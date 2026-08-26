@@ -319,14 +319,25 @@ func TestShutdownDeadlineDropsStuckClient(t *testing.T) {
 	defer hog.Close()
 	fmt.Fprintln(hog, "hog") // register; hog never reads its socket again
 
-	// One gigantic message forces hog's writer goroutine into a blocking
-	// conn.Write well before Shutdown runs.
+	// Wedge hog's writer by flooding it with large messages from a
+	// separate spammer. Hog never reads, so its kernel buffer fills after a
+	// few 256 KiB writes and the writer blocks until force-close.
 	hog.SetWriteDeadline(time.Now().Add(30 * time.Second))
-	big := strings.Repeat("x", 32<<20)
-	if _, err := fmt.Fprintf(hog, "%s\n", big); err != nil {
-		t.Fatalf("send big line: %v", err)
+	spam, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial spammer: %v", err)
 	}
-	time.Sleep(500 * time.Millisecond) // let the writer wedge on Write
+	defer spam.Close()
+	fmt.Fprintln(spam, "spammer")
+	time.Sleep(100 * time.Millisecond)
+	payload := strings.Repeat("x", 256*1024)
+	spam.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	for i := 0; i < 20; i++ {
+		if _, err := fmt.Fprintf(spam, "%s %d\n", payload, i); err != nil {
+			break
+		}
+	}
+	time.Sleep(700 * time.Millisecond) // let the writer wedge on Write
 
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
