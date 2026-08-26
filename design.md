@@ -161,6 +161,34 @@ Stage 5  Reconcile    Orchestrator routes findings back to the owning agent;
   diff/files under audit plus the relevant `design.md` section — never the
   implementer's reasoning — to avoid anchoring.
 
+### Adversarial Review Fleets
+
+Each project's Stage-4 gate is staffed by a FLEET of specialized
+adversarial agents rather than a single reviewer:
+
+| Seat | Specialization |
+|------|----------------|
+| **Correctness Hunter** | Logic bugs, boundary conditions, crash matrices, concurrency interleavings |
+| **Doc Skeptic** | Claim-by-claim doc verification, pedagogical soundness, false promises |
+| **Abuse Attacker** | Security, resource exhaustion, injection, secret leakage, DoS shapes |
+
+**Debate protocol (agents argue):**
+
+```
+Round 1  Independent strikes — each seat audits alone, writes findings file
+Round 2  Cross-examination — each seat reads the other seats' findings and
+         writes REBUTTALS: agrees, disputes (with evidence), or extends.
+         All rebuttals append to a shared debate file.
+Round 3  Adjudication (only if disputes remain) — orchestrator rules on each
+         disputed item against the spec; rulings are ledgered.
+Output   Consensus list (all seats agree) + Disputed list (with both sides)
+```
+
+Consensus Critical/High/Medium findings enter the standard fix loop;
+disputed items wait for adjudication before any fix dispatch. A fleet
+PASS requires zero consensus Critical/High findings and all disputes
+either resolved or parked with rulings.
+
 ### Finding Severity & Loop Policy
 
 - **Critical/High** (correctness, race, leak, secret exposure, false doc
