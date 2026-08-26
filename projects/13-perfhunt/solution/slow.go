@@ -155,9 +155,15 @@ func TopKSlow(items []string, k int) []Count {
 
 // NormalizeSlow compiles a fresh regexp on EVERY call — the canonical
 // hidden-cost mistake — then rebuilds the result with += piecewise.
+//
+// Contract note: Normalize defines every byte >= 0x80 as a separator
+// (ASCII-only canonicalization). Unicode-aware strings.ToLower would map
+// some non-ASCII runes INTO ASCII (e.g. U+212A KELVIN SIGN -> 'k'), so
+// non-ASCII bytes are blanked out BEFORE lowering to keep this twin
+// byte-for-byte identical to Normalize.
 func NormalizeSlow(s string) string {
 	re := regexp.MustCompile(`[^a-z0-9]+`) // compiled per call!
-	parts := re.Split(strings.ToLower(s), -1)
+	parts := re.Split(strings.ToLower(blankOutNonASCII(s)), -1)
 	out := ""
 	for i, part := range parts {
 		if part == "" {
@@ -238,16 +244,45 @@ func atoiSimple(s string) (int, bool) {
 	if i >= len(s) {
 		return 0, false
 	}
+	const maxInt = int(^uint(0) >> 1)
+	cutoff := maxInt / 10
+	lastDigit := maxInt % 10
+	if neg {
+		lastDigit++ // MinInt's magnitude fits one digit past MaxInt
+	}
 	n := 0
 	for ; i < len(s); i++ {
 		c := s[i]
 		if c < '0' || c > '9' {
 			return 0, false
 		}
-		n = n*10 + int(c-'0')
+		d := int(c - '0')
+		if n > cutoff || (n == cutoff && d > lastDigit) {
+			return 0, false // overflow: reject, mirroring strconv.Atoi
+		}
+		n = n*10 + d
 	}
 	if neg {
 		n = -n
 	}
 	return n, true
+}
+
+// blankOutNonASCII replaces every byte >= 0x80 with a space so the
+// downstream [^a-z0-9]+ split treats it as a separator run — exactly
+// what Normalize's byte scanner does. Applied before ToLower to stop
+// Unicode lowering from smuggling non-ASCII runes back into ASCII.
+func blankOutNonASCII(s string) string {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			b := []byte(s)
+			for j := i; j < len(b); j++ {
+				if b[j] >= 0x80 {
+					b[j] = ' '
+				}
+			}
+			return string(b)
+		}
+	}
+	return s
 }

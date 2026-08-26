@@ -105,7 +105,8 @@ func TopK(items []string, k int) []Count {
 // Normalize canonicalizes a free-form tag without any regexp: lowercase
 // ASCII letters, keep digits, collapse every run of other characters
 // into a single '-', trim leading/trailing dashes. One allocation (the
-// result), no per-call compilation.
+// result), no per-call compilation. Contract: ASCII-only — every byte
+// >= 0x80 is treated as a separator (NormalizeSlow must agree).
 func Normalize(s string) string {
 	b := make([]byte, 0, len(s))
 	pendingDash := true // start "after a dash" so leading runs are trimmed
@@ -135,6 +136,13 @@ func Normalize(s string) string {
 //
 //	GET /stats      -> Aggregate(dataset) as JSON
 //	GET /tags?k=N   -> TopK(allTags, N) as JSON array (default N=5)
+//
+// KNOWN LATENT HAZARD (review round 1, deferred by design): the
+// hand-rolled float serialization emits bare NaN/+Inf/-Inf for non-finite
+// values, which is INVALID JSON. This is unreachable today because
+// dataset() generates only finite seeded values; if the dataset ever
+// becomes data-driven or Aggregate accepts caller input here, a finite
+// check MUST be added before these AppendFloat calls.
 func Handler() http.HandlerFunc {
 	const statsPrefix = `{"count":`
 	return func(w http.ResponseWriter, r *http.Request) {

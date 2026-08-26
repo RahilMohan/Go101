@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -41,9 +42,36 @@ func TestSlowMatchesFastTopKAndNormalize(t *testing.T) {
 			t.Fatalf("TopK(k=%d): slow %v != fast %v", k, got, want)
 		}
 	}
-	for _, s := range []string{"Hello", "  Hello,  World! ", "!!!", "", "A--B c", "digits 42!"} {
+	for _, s := range []string{
+		"Hello", "  Hello,  World! ", "!!!", "", "A--B c", "digits 42!",
+		// Non-ASCII contract cases (review round 1, F1): bytes >= 0x80
+		// are separators; ToLower must not smuggle them into ASCII.
+		"\u212A", "A\u212AB", "caf\u00E9", "\u00C5rge",
+	} {
 		if got, want := NormalizeSlow(s), Normalize(s); got != want {
 			t.Fatalf("Normalize(%q): slow %q != fast %q", s, got, want)
+		}
+	}
+}
+
+func TestSlowMatchesFastParseK(t *testing.T) {
+	// Overflow/edge agreement with strconv.Atoi (review round 1, F2):
+	// huge k values must be REJECTED (ok=false) so both handlers keep
+	// the default k=5, never silently wrapping.
+	for _, raw := range []string{
+		"99999999999999999999", "-99999999999999999999",
+		"9223372036854775807", "-9223372036854775808",
+		"9223372036854775808", "-9223372036854775809",
+		"+12345678901234567890123", "18446744073709551616",
+		"-1", "0", "42", "+7", "-x", "", "-", "+",
+	} {
+		gotN, gotOK := atoiSimple(raw)
+		wantN, wantErr := strconv.Atoi(raw)
+		if gotOK != (wantErr == nil) {
+			t.Fatalf("atoiSimple(%q) ok=%v, Atoi err=%v — acceptance disagrees", raw, gotOK, wantErr)
+		}
+		if gotOK && gotN != wantN {
+			t.Fatalf("atoiSimple(%q) = %d, Atoi = %d", raw, gotN, wantN)
 		}
 	}
 }

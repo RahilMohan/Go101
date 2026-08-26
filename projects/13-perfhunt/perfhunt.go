@@ -69,7 +69,9 @@ func TopK(items []string, k int) []Count {
 // keep digits, collapse every run of other characters into a single
 // '-', and trim leading/trailing dashes. "  Hello,  World! " becomes
 // "hello-world". It is called once per tag on hot paths — which is why
-// compiling a regexp inside it matters.
+// compiling a regexp inside it matters. Contract: ASCII-only — every
+// byte >= 0x80 is treated as a separator (the solution's NormalizeSlow
+// must agree).
 func Normalize(s string) string {
 	// TODO: Implement
 	return ""

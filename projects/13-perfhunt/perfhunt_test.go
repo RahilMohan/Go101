@@ -239,6 +239,60 @@ func TestHandlerBadPathsAndMethods(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// 3b. Normalize: ASCII-only contract (review round 1, finding F1)
+// ---------------------------------------------------------------------------
+
+func TestNormalizeNonASCIIContract(t *testing.T) {
+	// Contract: bytes >= 0x80 are separators. Unicode-aware lowering
+	// must NOT smuggle non-ASCII runes into ASCII (e.g. U+212A KELVIN
+	// SIGN lowers to 'k' under strings.ToLower but is out of spec here).
+	cases := []struct{ in, want string }{
+		{"\u212A", ""},       // Kelvin sign alone -> separator run -> trimmed
+		{"A\u212AB", "a-b"},  // Kelvin sign splits A and B
+		{"caf\u00E9", "caf"}, // é is a trailing separator
+		{"\u00C5rge", "rge"}, // leading non-ASCII byte is a separator
+	}
+	for _, tc := range cases {
+		if got := Normalize(tc.in); got != tc.want {
+			t.Errorf("Normalize(%q) = %q, want %q (ASCII-only contract)", tc.in, got, tc.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 4b. Handler: k overflow falls back to default (review round 1, finding F2)
+// ---------------------------------------------------------------------------
+
+func TestHandlerTagsKOverflowDefault(t *testing.T) {
+	for _, target := range []string{
+		"/tags?k=99999999999999999999", // wraps int64 if unchecked
+		"/tags?k=-99999999999999999999",
+	} {
+		rec := doReq(t, Handler(), http.MethodGet, target)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want 200; body: %s", target, rec.Code, rec.Body.String())
+		}
+		var rows []struct {
+			Item  string `json:"item"`
+			Count int    `json:"count"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatalf("decoding %s response: %v\nbody: %s", target, err, rec.Body.String())
+		}
+		_, allTags := dataset()
+		want := TopK(allTags, 5) // overflow must keep default k=5
+		if len(rows) != len(want) {
+			t.Fatalf("%s returned %d rows, want %d (default k=5)", target, len(rows), len(want))
+		}
+		for i, w := range want {
+			if rows[i].Item != w.Item || rows[i].Count != w.Count {
+				t.Errorf("%s row %d = {%s %d}, want {%s %d}", target, i, rows[i].Item, rows[i].Count, w.Item, w.Count)
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // 5. Dataset sanity: the embedded data must be non-trivial and stable
 // ---------------------------------------------------------------------------
 
