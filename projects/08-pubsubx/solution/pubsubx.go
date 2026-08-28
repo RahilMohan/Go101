@@ -109,8 +109,14 @@ func (s *subscriber[T]) deliver(msg T) bool {
 // blockingDeliver repeatedly attempts to send until admitted, removed,
 // or ctx is done. It reports whether the message was admitted (a
 // subscriber disappearing counts as admitted: there is nobody left to
-// wait for).
+// wait for). A nil ctx is treated as context.Background() (blocks until
+// admitted or subscriber vanishes) and is documented on PublishBlocking.
 func (s *subscriber[T]) blockingDeliver(ctx context.Context, msg T) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	t := time.NewTimer(pollInterval)
+	defer t.Stop()
 	for {
 		s.mu.RLock()
 		if s.closed {
@@ -127,7 +133,8 @@ func (s *subscriber[T]) blockingDeliver(ctx context.Context, msg T) bool {
 		select {
 		case <-ctx.Done():
 			return false
-		case <-time.After(pollInterval):
+		case <-t.C:
+			t.Reset(pollInterval)
 		}
 	}
 }
@@ -161,7 +168,7 @@ func (b *Broker[T]) Subscribe(capacity int) (<-chan T, func()) {
 	b.mu.Lock()
 	if b.isClosed {
 		b.mu.Unlock()
-		ch := make(chan T)
+		ch := make(chan T, 1)
 		close(ch)
 		var noop sync.Once
 		return ch, func() { noop.Do(func() {}) }
@@ -234,8 +241,13 @@ func (b *Broker[T]) SetDefaultPolicy(p Policy) {
 // message or ctx is done. Non-blocking-policy subscribers get their
 // ordinary drop semantics and do not gate completion. If any blocked
 // subscriber could not be admitted before ctx was done, PublishBlocking
-// returns ctx.Err(); otherwise it returns nil.
+// returns ctx.Err(); otherwise it returns nil. A nil ctx is treated as
+// context.Background() (i.e., block until admitted or subscriber
+// vanishes); callers that need cancellation must pass a non-nil context.
 func (b *Broker[T]) PublishBlocking(ctx context.Context, msg T) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	b.mu.Lock()
 	if b.isClosed {
 		b.mu.Unlock()
@@ -243,7 +255,11 @@ func (b *Broker[T]) PublishBlocking(ctx context.Context, msg T) error {
 	}
 	blocking := make([]*subscriber[T], 0, len(b.subs))
 	for _, sub := range b.subs {
-		if sub.policy == Block && !sub.closed {
+		sub.mu.RLock()
+		isClosed := sub.closed
+		isBlock := sub.policy == Block
+		sub.mu.RUnlock()
+		if isBlock && !isClosed {
 			blocking = append(blocking, sub)
 			continue
 		}
