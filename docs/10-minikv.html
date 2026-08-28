@@ -292,7 +292,8 @@
         bloom filters. LSMs are how real embedded databases achieve write amplification
         wins at scale, but they're a multi-thousand-line project whose core difficulty
         (compaction scheduling) teaches nothing this project targets. An append-only log
-        plus an in-memory map captures the durability lesson in ~300 lines.</li>
+        plus an in-memory map captures the durability lesson in ~400 lines
+        of core logic (~870 with tests, server, and lifecycle).</li>
     <li><strong><code>goleveldb</code> (or bbolt as the backing store)</strong> — same
         objection, sharper form: using a database library to build a database teaches you
         the library's API, not the ideas underneath it. You'd get durability for free and
@@ -420,7 +421,9 @@
 
   <h3>D2: WAL framing — two levels of length prefixes</h3>
   <pre><code><span class="com">// u32 big-endian record length | u32 argc | per-arg: u32 len + raw bytes</span>
-<span class="kw">func</span> <span class="fn">encodeRecord</span>(args []<span class="typ">string</span>) []<span class="typ">byte</span> {
+<span class="kw"> func</span> <span class="fn">encodeRecord</span>(args []<span class="typ">string</span>) []<span class="typ">byte</span> {
+    <span class="com">// total = 4 + Σ(4 + len(arg)) — computed from args; elided for brevity</span>
+    total := <span class="num">4</span>; <span class="kw">for</span> _, a := <span class="kw">range</span> args { total += <span class="num">4</span> + len(a) }
     buf := <span class="fn">make</span>([]<span class="typ">byte</span>, <span class="num">4</span>, total)
     binary.<span class="typ">BigEndian</span>.<span class="fn">PutUint32</span>(buf, <span class="typ">uint32</span>(len(args)))
     <span class="kw">for</span> _, a := <span class="kw">range</span> args {

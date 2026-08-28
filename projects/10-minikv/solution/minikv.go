@@ -780,8 +780,8 @@ func readCommand(r *bufio.Reader) ([]string, error) {
 		return nil, fmt.Errorf("expected array header, got %q", line)
 	}
 	n, err := strconv.Atoi(string(line[1:]))
-	if err != nil || n < 0 {
-		return nil, fmt.Errorf("bad array length %q", line[1:])
+	if err != nil || n < 0 || n > 4096 {
+		return nil, fmt.Errorf("bad array length %q (cap 4096)", line[1:])
 	}
 	args := make([]string, 0, n)
 	for i := 0; i < n; i++ {
