@@ -10,6 +10,7 @@
 package solution
 
 import (
+	"bufio"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"runtime/debug"
@@ -96,6 +98,14 @@ func (s *Store) Save(code, url string) error {
 // code already exists. Used by tests to exercise conflicts deterministically
 // and internally by Save. The query uses placeholders (?), never string
 // interpolation, so values cannot inject SQL.
+//
+// UNIQUE detection is driver-text-coupled: database/sql exposes no portable
+// constraint code, so we match the modernc.org/sqlite error string
+// "UNIQUE constraint failed". A portable alternative would use errors.As to
+// assert the driver error type (e.g. sqlite.Error with Code
+// SQLITE_CONSTRAINT_UNIQUE / 2067) and branch on that, but that couples to
+// driver types instead of strings. Keep the string match for this tier's
+// scope and document the tradeoff (see docs §4 walkthrough).
 func (s *Store) SaveCode(code, url string) error {
 	_, err := s.db.Exec(`INSERT INTO urls (code, url) VALUES (?, ?)`, code, url)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -143,6 +153,12 @@ func NewServer(store *Store, baseURL string) *Server {
 
 // Handler returns the fully-wired http.Handler: RequestLogger ->
 // Recoverer -> ServeMux with Go 1.22 method+path patterns.
+//
+// Catch-all "/" deliberately shadows ServeMux's automatic 405 Method Not
+// Allowed: without it Go 1.22 would synthesize 405 + Allow for wrong-method
+// paths; with it every unmatched request gets a consistent JSON 404 matching
+// the API contract. Delete the catch-all and you get 405 for free (see
+// docs §4 walkthrough).
 func (sv *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/shorten", sv.handleShorten)
@@ -211,15 +227,40 @@ func (sv *Server) handleRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 // statusRecorder captures the status code written by downstream handlers so
-// RequestLogger can log it.
+// RequestLogger can log it. It forwards optional interfaces (Flusher,
+// Hijacker) when the underlying ResponseWriter implements them, so generic
+// middleware does not break SSE/WebSocket upgrades.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
 }
 
 func (r *statusRecorder) WriteHeader(code int) {
+	if r.status != 0 {
+		return
+	}
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.ResponseWriter.Write(b)
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := r.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, errors.New("shorty: underlying ResponseWriter does not support hijacking")
 }
 
 // RequestLogger returns middleware that writes one line per request to w:
@@ -228,10 +269,15 @@ func RequestLogger(w io.Writer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			rec := &statusRecorder{ResponseWriter: rw, status: http.StatusOK}
+			rec := &statusRecorder{ResponseWriter: rw}
 			next.ServeHTTP(rec, r)
-			path := strings.ReplaceAll(r.URL.Path, "\n", "%0A") // block log-line forgery
-			fmt.Fprintf(w, "%s %s %d %v\n", r.Method, path, rec.status, time.Since(start))
+			status := rec.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			path := strings.ReplaceAll(r.URL.Path, "\n", "%0A")
+			path = strings.ReplaceAll(path, "\r", "%0D") // block log-line forgery (\r can split logs on some collectors)
+			fmt.Fprintf(w, "%s %s %d %v\n", r.Method, path, status, time.Since(start))
 		})
 	}
 }
@@ -242,15 +288,21 @@ func RequestLogger(w io.Writer) func(http.Handler) http.Handler {
 func Recoverer(out io.Writer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			// Wrap rw so we can tell whether headers were already sent; if a
+			// panic occurs after WriteHeader, writing a 500 would be a
+			// double-write (headers already on the wire) and must be skipped.
+			rec := &statusRecorder{ResponseWriter: rw}
 			defer func() {
-				if rec := recover(); rec != nil {
-					fmt.Fprintf(out, "shorty: recovered from panic: %v\n%s\n", rec, debug.Stack())
-					writeJSON(rw, http.StatusInternalServerError, map[string]string{
-						"error": "internal server error",
-					})
+				if p := recover(); p != nil {
+					fmt.Fprintf(out, "shorty: recovered from panic: %v\n%s\n", p, debug.Stack())
+					if rec.status == 0 {
+						writeJSON(rec, http.StatusInternalServerError, map[string]string{
+							"error": "internal server error",
+						})
+					}
 				}
 			}()
-			next.ServeHTTP(rw, r)
+			next.ServeHTTP(rec, r)
 		})
 	}
 }

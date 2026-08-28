@@ -10,9 +10,22 @@
 package shorty
 
 import (
+	"bufio"
+	"crypto/rand"
+	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
+	"net/url"
+	"runtime/debug"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 // ErrCodeTaken is returned by SaveCode when the code already exists.
@@ -24,84 +37,298 @@ var ErrCodeTaken = errors.New("shorty: code already taken")
 // errors.Is(err, ErrNotFound).
 var ErrNotFound = errors.New("shorty: not found")
 
+const (
+	codeLen     = 6
+	insertTries = 5
+	maxBodyLen  = 1 << 20
+	base62      = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+)
+
+const schema = `
+CREATE TABLE IF NOT EXISTS urls (
+	code TEXT PRIMARY KEY,
+	url  TEXT NOT NULL
+);`
+
 // Store is the SQLite-backed URL store.
 type Store struct {
-	// TODO: Implement
-	_ struct{}
+	db *sql.DB
 }
 
 // OpenStore opens (creating if necessary) the SQLite database at dbPath,
 // enables WAL journaling, and runs schema migration
 // (CREATE TABLE IF NOT EXISTS).
 func OpenStore(dbPath string) (*Store, error) {
-	// TODO: Implement
-	return &Store{}, nil
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("shorty: open %s: %w", dbPath, err)
+	}
+	db.SetMaxOpenConns(1) // modernc.org/sqlite serializes writes; one conn avoids SQLITE_BUSY churn
+	for _, pragma := range []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA busy_timeout=5000",
+	} {
+		if _, err := db.Exec(pragma); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("shorty: %s: %w", pragma, err)
+		}
+	}
+	if _, err := db.Exec(schema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("shorty: migrate: %w", err)
+	}
+	return &Store{db: db}, nil
 }
 
 // Close releases the underlying database connections.
 func (s *Store) Close() error {
-	// TODO: Implement
-	return nil
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
 }
 
 // Save inserts code->url if code is unused; returns ErrCodeTaken if
 // duplicate. It delegates to SaveCode.
 func (s *Store) Save(code, url string) error {
-	// TODO: Implement
-	return nil
+	return s.SaveCode(code, url)
 }
 
 // SaveCode inserts an explicit code->url mapping; returns ErrCodeTaken if
 // code already exists. Used by tests to exercise conflicts deterministically
-// and internally by Save.
+// and internally by Save. The query uses placeholders (?), never string
+// interpolation, so values cannot inject SQL.
+//
+// UNIQUE detection is driver-text-coupled: database/sql exposes no portable
+// constraint code, so we match the modernc.org/sqlite error string
+// "UNIQUE constraint failed". A portable alternative would use errors.As to
+// assert the driver error type (e.g. sqlite.Error with Code
+// SQLITE_CONSTRAINT_UNIQUE / 2067) and branch on that, but that couples to
+// driver types instead of strings. Keep the string match for this tier's
+// scope and document the tradeoff (see docs §4 walkthrough).
 func (s *Store) SaveCode(code, url string) error {
-	// TODO: Implement
+	_, err := s.db.Exec(`INSERT INTO urls (code, url) VALUES (?, ?)`, code, url)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		return fmt.Errorf("shorty: save %q: %w", code, ErrCodeTaken)
+	}
+	if err != nil {
+		return fmt.Errorf("shorty: save %q: %w", code, err)
+	}
 	return nil
 }
 
 // Resolve returns the target URL for code, or ErrNotFound when unknown.
 func (s *Store) Resolve(code string) (string, error) {
-	// TODO: Implement
-	return "", nil
+	var target string
+	err := s.db.QueryRow(`SELECT url FROM urls WHERE code = ?`, code).Scan(&target)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("shorty: resolve %q: %w", code, ErrNotFound)
+	}
+	if err != nil {
+		return "", fmt.Errorf("shorty: resolve %q: %w", code, err)
+	}
+	return target, nil
 }
 
 // Count returns how many URLs are stored.
 func (s *Store) Count() (int64, error) {
-	// TODO: Implement
-	return 0, nil
+	var n int64
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM urls`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("shorty: count: %w", err)
+	}
+	return n, nil
 }
 
 // Server wires routes and middleware around a Store.
 type Server struct {
-	// TODO: Implement
-	_ struct{}
+	store *Store
+	base  string
 }
 
 // NewServer returns a Server serving store, using baseURL (e.g.
 // "http://localhost:8080") to build Location-style short_url responses.
 func NewServer(store *Store, baseURL string) *Server {
-	// TODO: Implement
-	return &Server{}
+	return &Server{store: store, base: strings.TrimSuffix(baseURL, "/")}
 }
 
 // Handler returns the fully-wired http.Handler: RequestLogger ->
 // Recoverer -> ServeMux with Go 1.22 method+path patterns.
+//
+// Catch-all "/" deliberately shadows ServeMux's automatic 405 Method Not
+// Allowed: without it Go 1.22 would synthesize 405 + Allow for wrong-method
+// paths; with it every unmatched request gets a consistent JSON 404 matching
+// the API contract. Delete the catch-all and you get 405 for free (see
+// docs §4 walkthrough).
 func (sv *Server) Handler() http.Handler {
-	// TODO: Implement
-	return http.NotFoundHandler()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/shorten", sv.handleShorten)
+	mux.HandleFunc("GET /api/stats", sv.handleStats)
+	mux.HandleFunc("GET /{code}", sv.handleRedirect)
+	mux.HandleFunc("/", writeError(http.StatusNotFound, "not found"))
+	return RequestLogger(log.Writer())(Recoverer(log.Writer())(mux))
+}
+
+func (sv *Server) handleShorten(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyLen)
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(http.StatusBadRequest, "invalid JSON body")(w, r)
+		return
+	}
+	u, err := url.Parse(req.URL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		writeError(http.StatusBadRequest, "url must be an absolute http(s) URL")(w, r)
+		return
+	}
+
+	for i := 0; i < insertTries; i++ {
+		code := generateCode()
+		switch err := sv.store.Save(code, u.String()); {
+		case err == nil:
+			writeJSON(w, http.StatusCreated, map[string]string{
+				"code":      code,
+				"short_url": sv.base + "/" + code,
+			})
+			return
+		case errors.Is(err, ErrCodeTaken):
+			continue // generated-code collision; astronomically rare — retry
+		default:
+			log.Printf("shorty: save: %v", err)
+			writeError(http.StatusInternalServerError, "internal server error")(w, r)
+			return
+		}
+	}
+	writeError(http.StatusInternalServerError, "could not allocate code")(w, r)
+}
+
+func (sv *Server) handleStats(w http.ResponseWriter, r *http.Request) {
+	n, err := sv.store.Count()
+	if err != nil {
+		log.Printf("shorty: stats: %v", err)
+		writeError(http.StatusInternalServerError, "internal server error")(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"count": n})
+}
+
+func (sv *Server) handleRedirect(w http.ResponseWriter, r *http.Request) {
+	target, err := sv.store.Resolve(r.PathValue("code"))
+	switch {
+	case errors.Is(err, ErrNotFound):
+		writeError(http.StatusNotFound, "not found")(w, r)
+	case err != nil:
+		log.Printf("shorty: redirect: %v", err)
+		writeError(http.StatusInternalServerError, "internal server error")(w, r)
+	default:
+		http.Redirect(w, r, target, http.StatusFound)
+	}
+}
+
+// statusRecorder captures the status code written by downstream handlers so
+// RequestLogger can log it. It forwards optional interfaces (Flusher,
+// Hijacker) when the underlying ResponseWriter implements them, so generic
+// middleware does not break SSE/WebSocket upgrades.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	if r.status != 0 {
+		return
+	}
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.ResponseWriter.Write(b)
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := r.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, errors.New("shorty: underlying ResponseWriter does not support hijacking")
 }
 
 // RequestLogger returns middleware that writes one line per request to w:
 // "<method> <path> <status> <duration>".
 func RequestLogger(w io.Writer) func(http.Handler) http.Handler {
-	// TODO: Implement
-	return func(next http.Handler) http.Handler { return next }
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			rec := &statusRecorder{ResponseWriter: rw}
+			next.ServeHTTP(rec, r)
+			status := rec.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			path := strings.ReplaceAll(r.URL.Path, "\n", "%0A")
+			path = strings.ReplaceAll(path, "\r", "%0D") // block log-line forgery (\r can split logs on some collectors)
+			fmt.Fprintf(w, "%s %s %d %v\n", r.Method, path, status, time.Since(start))
+		})
+	}
 }
 
 // Recoverer returns middleware that recovers panics from downstream
 // handlers, responds 500 with {"error":"internal server error"}, and logs
 // the panic value plus stack trace to log.
-func Recoverer(log io.Writer) func(http.Handler) http.Handler {
-	// TODO: Implement
-	return func(next http.Handler) http.Handler { return next }
+func Recoverer(out io.Writer) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			// Wrap rw so we can tell whether headers were already sent; if a
+			// panic occurs after WriteHeader, writing a 500 would be a
+			// double-write (headers already on the wire) and must be skipped.
+			rec := &statusRecorder{ResponseWriter: rw}
+			defer func() {
+				if p := recover(); p != nil {
+					fmt.Fprintf(out, "shorty: recovered from panic: %v\n%s\n", p, debug.Stack())
+					if rec.status == 0 {
+						writeJSON(rec, http.StatusInternalServerError, map[string]string{
+							"error": "internal server error",
+						})
+					}
+				}
+			}()
+			next.ServeHTTP(rec, r)
+		})
+	}
+}
+
+// generateCode returns a cryptographically random base62 code of length
+// codeLen.
+func generateCode() string {
+	raw := make([]byte, codeLen)
+	if _, err := rand.Read(raw); err != nil {
+		panic(fmt.Sprintf("shorty: rand.Read: %v", err)) // crypto/rand failure is unrecoverable
+	}
+	out := make([]byte, codeLen)
+	for i, v := range raw {
+		out[i] = base62[int(v)%len(base62)]
+	}
+	return string(out)
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(body)
+}
+
+func writeError(status int, msg string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, status, map[string]string{"error": msg})
+	}
 }

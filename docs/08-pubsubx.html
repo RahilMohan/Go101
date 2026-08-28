@@ -369,7 +369,10 @@
         the locking protocol makes close-during-send unrepresentable under any interleaving.</li>
     <li><strong>NF2 — Publishers never block.</strong> Plain <code>Publish</code> uses only
         non-blocking selects; even Block-policy subscribers degrade to DropNew for it.</li>
-    <li><strong>NF3 — Flake-free under <code>-race</code>.</strong> Timing assertions are
+    <li><strong>NF3 — Flake-free under <code>-race</code>.</strong> No data races: the
+        <code>sub.closed</code> read in <code>PublishBlocking</code> is guarded by
+        <code>sub.mu.RLock</code> (snapshot, not a naked read), so <code>go test -race</code>
+        reports zero <code>DATA RACE</code>s even under the hammer. Timing assertions remain
         watchdogs with huge margins; primary assertions count events (delivered counts, buffer
         contents, closed flags).</li>
     <li><strong>NF4 — Bounded blocking.</strong> Any path that waits (PublishBlocking) is bound
@@ -481,15 +484,17 @@ sub := &amp;<span class="typ">subscriber</span>[T]{
      subscribers like DropNew (it promised never to block) and only
      <code>PublishBlocking</code> honors them.</p>
 
-  <h3>D4: The PublishBlocking admission protocol</h3>
-  <pre><code>b.mu.<span class="fn">Lock</span>()
+   <h3>D4: The PublishBlocking admission protocol</h3>
+  <pre><code><span class="kw">if</span> ctx == <span class="kw">nil</span> { ctx = context.<span class="fn">Background</span>() } <span class="com">// nil ctx blocks until admitted (no panic)</span>
+b.mu.<span class="fn">Lock</span>()
 <span class="kw">if</span> b.isClosed {
     b.mu.<span class="fn">Unlock</span>()
     <span class="kw">return</span> <span class="kw">nil</span>
 }
 blocking := <span class="fn">make</span>([]*<span class="typ">subscriber</span>[T], <span class="num">0</span>, len(b.subs))
 <span class="kw">for</span> _, sub := <span class="kw">range</span> b.subs {
-    <span class="kw">if</span> sub.policy == <span class="typ">Block</span> &amp;&amp; !sub.closed {
+    sub.mu.<span class="fn">RLock</span>(); isClosed := sub.closed; isBlock := sub.policy == <span class="typ">Block</span>; sub.mu.<span class="fn">RUnlock</span>()
+    <span class="kw">if</span> isBlock &amp;&amp; !isClosed {
         blocking = <span class="fn">append</span>(blocking, sub)
         <span class="kw">continue</span>
     }
@@ -497,38 +502,51 @@ blocking := <span class="fn">make</span>([]*<span class="typ">subscriber</span>[
 }
 b.mu.<span class="fn">Unlock</span>()
 
-<span class="com">// ... one goroutine per Block sub, each polling admission every</span>
-<span class="com">// 250µs until admitted / removed / ctx done ...</span>
+<span class="com">// ... one goroutine per Block sub, each polling admission with</span>
+<span class="com">// time.NewTimer(pollInterval)+Reset (not time.After) until</span>
+<span class="com">// admitted / removed / ctx done ...</span>
 
 wg.<span class="fn">Wait</span>()</code></pre>
   <p>Blocking delivery has to answer a hard question: the broker cannot observe consumers
      receiving from their channels — callers own those channels directly — so "wait for room"
      has no natural wakeup signal. The solution polls: retry admission every 250µs, exiting when
      admitted, when the subscriber disappears (a vanished subscriber counts as
-     <em>admitted</em> — there's nobody left to wait for), or when ctx fires. Three contract
-     details matter. First, non-Block subscribers are dispatched under the initial lock grab and
-     never gate completion — R6 pins this. Second, the per-subscriber goroutines run
-     <em>outside</em> Broker.mu, so one stalled Block subscriber can't freeze the whole broker.
-     Third, the edge case the review flagged: if the broker closes while a publisher is
-     mid-wait, the subscriber vanishes, <code>blockingDeliver</code> sees <code>closed ==
-     true</code>, and returns admitted. Mid-wait close = admitted — the message goes where it
-     can, and the publisher isn't stranded. And yes: <code>Block</code> +
-     <code>context.Background()</code> blocks until Close/Unsubscribe. That is the contract,
-     not a bug — the API makes the escape hatches explicit.</p>
+     <em>admitted</em> — there's nobody left to wait for), or when ctx fires. A nil ctx is
+     normalized to <code>context.Background()</code> at the top of both <code>PublishBlocking</code>
+     and <code>blockingDeliver</code>, so a nil context blocks until admitted rather than
+     panicking on <code>&lt;-ctx.Done()</code>. Polling uses a single
+     <code>time.NewTimer</code> with <code>Reset</code>/<code>Stop</code> instead of
+     <code>time.After</code> to avoid leaking thousands of timers under the hammer. The
+     <code>sub.closed</code> check that partitions Block vs non-Block subscribers is guarded by
+     <code>sub.mu.RLock</code> (snapshot, not a naked read), eliminating the data race that
+     <code>-race</code> previously reported. Three further contract details matter. First,
+     non-Block subscribers are dispatched under the initial lock grab and never gate completion —
+     R6 pins this. Second, the per-subscriber goroutines run <em>outside</em> Broker.mu, so one
+     stalled Block subscriber can't freeze the whole broker. Third, the edge case the review
+     flagged: if the broker closes while a publisher is mid-wait, the subscriber vanishes,
+     <code>blockingDeliver</code> sees <code>closed == true</code>, and returns admitted.
+     Mid-wait close = admitted — the message goes where it can, and the publisher isn't stranded.
+     And yes: <code>Block</code> + <code>context.Background()</code> (including nil ctx) blocks
+     until Close/Unsubscribe. That is the contract, not a bug — the API makes the escape hatches
+     explicit.</p>
 
-  <h3>D5: Subscribe-after-Close and other spec gap-fills</h3>
+   <h3>D5: Subscribe-after-Close and other spec gap-fills</h3>
   <pre><code><span class="kw">if</span> b.isClosed {
     b.mu.<span class="fn">Unlock</span>()
-    ch := <span class="fn">make</span>(<span class="kw">chan</span> T)
+    ch := <span class="fn">make</span>(<span class="kw">chan</span> T, <span class="num">1</span>) <span class="com">// cap 1: matches Subscribe's clamp invariant</span>
     <span class="fn">close</span>(ch)
     <span class="kw">var</span> noop sync.<span class="typ">Once</span>
     <span class="kw">return</span> ch, <span class="kw">func</span>() { noop.<span class="fn">Do</span>(<span class="kw">func</span>() {}) }
 }</code></pre>
   <p>Every lifecycle corner gets an explicit answer rather than a shrug. Subscribing to a closed
-     broker returns an already-closed channel plus a no-op unsubscribe — the caller's code runs
-     unchanged, receives nothing, and cleans up harmlessly. Capacity below 1 clamps to 1, since a
-     zero-capacity channel would change Block/drop semantics entirely. Unknown policy values fall
-     back to DropNew rather than misbehaving silently. These aren't gold-plating: they're the
+     broker returns an already-closed channel (cap 1, matching the <code>capacity &lt; 1 → 1</code>
+     clamp — the closed path previously returned cap 0, now fixed to cap 1 so
+     <code>cap(ch)==1</code> after Close matches a normal Subscribe) plus a no-op unsubscribe —
+     the caller's code runs unchanged, receives nothing, and cleans up harmlessly. Capacity below
+     1 clamps to 1, since a zero-capacity channel would change Block/drop semantics entirely.
+     Unknown policy values fall back to DropNew rather than misbehaving silently. A nil context
+     passed to <code>PublishBlocking</code> is treated as <code>context.Background()</code>
+     (documented on that method) rather than panicking. These aren't gold-plating: they're the
      difference between a type whose edge behavior you must memorize and one whose edges are all
      load-bearing and documented.</p>
 </section>

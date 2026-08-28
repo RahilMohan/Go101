@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -37,7 +38,23 @@ const (
 
 	// handshakeTimeout bounds how long a connection may sit silent before
 	// sending its display-name line, so pre-registration conns can't leak.
-	handshakeTimeout = 60 * time.Second
+	handshakeTimeout = 30 * time.Second
+
+	// idleTimeout bounds how long a registered connection may stay idle
+	// without sending a line. Each successful ReadLine resets the deadline,
+	// so an idle client is disconnected after this duration. This mitigates
+	// slowloris-style holds that would otherwise keep a goroutine/FD alive
+	// indefinitely.
+	idleTimeout = 60 * time.Second
+
+	// maxLineBytes caps the maximum wire line length (including newline).
+	// Lines exceeding this are rejected and the client is disconnected,
+	// preventing a single peer from forcing unbounded heap allocation (OOM).
+	maxLineBytes = 4 << 20 // 4 MiB
+
+	// maxConns caps concurrent accepted connections. When the limit is hit,
+	// new connections are closed immediately, bounding goroutines and FDs.
+	maxConns = 1000
 
 	goodbyeText = "server shutting down, goodbye"
 )
@@ -56,9 +73,14 @@ func WriteLine(w io.Writer, s string) error {
 }
 
 // ReadLine reads one newline-terminated line, trimming \r\n. It returns
-// io.EOF unchanged when the peer closed cleanly.
+// io.EOF unchanged when the peer closed cleanly. Lines exceeding
+// maxLineBytes are rejected with an error so the caller can disconnect the
+// client, bounding per-connection allocation.
 func ReadLine(r *bufio.Reader) (string, error) {
 	line, err := r.ReadString('\n')
+	if len(line) > maxLineBytes {
+		return "", fmt.Errorf("line too long: %d bytes exceeds %d", len(line), maxLineBytes)
+	}
 	return strings.TrimRight(line, "\r\n"), err
 }
 
@@ -105,6 +127,8 @@ type Server struct {
 
 	connsMu   sync.Mutex
 	liveConns map[net.Conn]struct{} // every registered conn, kept current incrementally so force-close never sees a stale snapshot
+
+	sem chan struct{} // counting semaphore bounding concurrent connections to maxConns
 }
 
 // NewServer returns a ready-to-serve Server with its hub goroutine running.
@@ -119,6 +143,7 @@ func NewServer() *Server {
 		hubDone:   make(chan struct{}),
 		doneCh:    make(chan struct{}),
 		liveConns: make(map[net.Conn]struct{}),
+		sem:       make(chan struct{}, maxConns),
 	}
 	go func() {
 		<-s.hubDone
@@ -265,12 +290,16 @@ func (s *Server) removeAndAnnounce(clients map[string]*client, subs map[<-chan E
 // client, then out-channel closes so each writer drains what it can and
 // closes its conn. Subscriber channels are closed so their owners' range
 // loops end. Conns stay in liveConns until force-close or natural writer
-// exit handles them.
+// exit handles them. The goodbye is best-effort: if a client's 64-slot
+// queue is full the message is dropped and the drop is logged, so R4's
+// "every client gets goodbye" holds under normal backpressure but may be
+// missed by a wedged/slow client at shutdown time.
 func (s *Server) finalize(clients map[string]*client, subs map[<-chan Event]chan Event) {
 	for _, c := range clients {
 		select {
 		case c.out <- "* " + goodbyeText:
-		default: // queue full: this client gets dropped, not waited on
+		default: // queue full: best-effort goodbye, log the drop
+			log.Printf("chatwire: goodbye dropped for %s (queue full)", c.name)
 		}
 		close(c.out)
 	}
@@ -295,7 +324,9 @@ func (s *Server) writeLoop(c *client) {
 // handleConn is the per-connection reader goroutine (reader-per-connection).
 // It performs the name handshake, then forwards message lines to the hub,
 // and finally asks the hub to remove the client. It never closes the conn
-// itself once registration succeeded — the writer owns that.
+// itself once registration succeeded — the writer owns that. Idle timeout
+// is enforced via SetReadDeadline per line; overlong lines are rejected via
+// ReadLine's maxLineBytes check.
 func (s *Server) handleConn(conn net.Conn) {
 	br := bufio.NewReader(conn)
 	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
@@ -304,7 +335,6 @@ func (s *Server) handleConn(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	conn.SetReadDeadline(time.Time{}) // registered users may idle forever
 
 	c := &client{conn: conn, out: make(chan string, clientOutBuf)}
 	req := &registerReq{name: strings.TrimSpace(line), reply: make(chan string, 1), c: c}
@@ -323,6 +353,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 
 	for {
+		_ = conn.SetReadDeadline(time.Now().Add(idleTimeout))
 		line, err := ReadLine(br)
 		if err != nil {
 			if line != "" { // final unterminated line still counts as a msg
@@ -351,7 +382,10 @@ func (s *Server) handleConn(conn net.Conn) {
 }
 
 // Serve listens on addr and blocks until the listener closes or Shutdown is
-// called. Each accepted connection spawns a reader goroutine.
+// called. Each accepted connection spawns a reader goroutine. Concurrent
+// connections are capped at maxConns (excess are closed immediately) and the
+// handshake is bounded by handshakeTimeout; registered conns use idleTimeout
+// per ReadLine (see handleConn).
 func (s *Server) Serve(addr string) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -361,7 +395,7 @@ func (s *Server) Serve(addr string) error {
 	if s.closed {
 		s.mu.Unlock()
 		ln.Close()
-		return fmt.Errorf("chatwire: %w", net.ErrClosed)
+		return nil // closed before Serve started: treat as clean shutdown
 	}
 	s.ln = ln
 	s.mu.Unlock()
@@ -374,7 +408,17 @@ func (s *Server) Serve(addr string) error {
 			}
 			return err
 		}
-		go s.handleConn(conn)
+		// Bound concurrent connections: drop excess immediately.
+		select {
+		case s.sem <- struct{}{}:
+		default:
+			conn.Close()
+			continue
+		}
+		go func(c net.Conn) {
+			defer func() { <-s.sem }()
+			s.handleConn(c)
+		}(conn)
 	}
 }
 

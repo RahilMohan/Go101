@@ -51,6 +51,27 @@ var byCode = map[string]Currency{
 // different currencies; such a combination has no meaningful result.
 var ErrCurrencyMismatch = errors.New("money: currency mismatch")
 
+// ErrBadFormat indicates a malformed amount string (wrong shape, bad digits).
+var ErrBadFormat = errors.New("money: bad format")
+
+// ErrRange indicates a numeric value outside the int64 range.
+var ErrRange = errors.New("money: out of range")
+
+// Valid reports whether c is a plausible currency definition.
+// Code must be non-empty and Exponent in [0,18]. In practice ISO 4217
+// currencies use exponents 0..4 (e.g. JPY 0, USD 2, BHD 3); the upper bound
+// 18 is the safe rendering limit before 10^Exponent overflows int64/uint64
+// and would make String divide by zero.
+func (c Currency) Valid() error {
+	if c.Code == "" {
+		return fmt.Errorf("%w: empty currency code", ErrBadFormat)
+	}
+	if c.Exponent < 0 || c.Exponent > 18 {
+		return fmt.Errorf("%w: exponent %d out of range [0,18]", ErrBadFormat, c.Exponent)
+	}
+	return nil
+}
+
 // Amount is an immutable value: a count of minor units plus the currency it
 // is denominated in. The zero Amount is not a valid monetary value; build
 // Amounts with NewAmount or ParseAmount.
@@ -61,6 +82,10 @@ type Amount struct {
 
 // NewAmount returns an Amount of minor minor units in currency c. It never
 // fails: the caller is responsible for choosing sensible minor units.
+// For validated currencies use c.Valid() before construction; the library
+// itself does not reject arbitrary Currency values here to keep the
+// constructor infallible, but String and ParseAmount guard against
+// out-of-range exponents.
 func NewAmount(minor int64, c Currency) Amount {
 	return Amount{minor: minor, currency: c}
 }
@@ -84,7 +109,7 @@ func (a Amount) Add(b Amount) (Amount, error) {
 	}
 	sum := a.minor + b.minor
 	if (a.minor > 0 && b.minor > 0 && sum < 0) || (a.minor < 0 && b.minor < 0 && sum >= 0) {
-		return Amount{}, fmt.Errorf("money: add overflows int64: %d + %d", a.minor, b.minor)
+		return Amount{}, fmt.Errorf("money: add overflows int64: %d + %d: %w", a.minor, b.minor, ErrRange)
 	}
 	return Amount{minor: sum, currency: a.currency}, nil
 }
@@ -98,7 +123,7 @@ func (a Amount) Sub(b Amount) (Amount, error) {
 	}
 	diff := a.minor - b.minor
 	if (b.minor < 0 && a.minor > math.MaxInt64+b.minor) || (b.minor > 0 && a.minor < math.MinInt64+b.minor) {
-		return Amount{}, fmt.Errorf("money: subtract overflows int64: %d - %d", a.minor, b.minor)
+		return Amount{}, fmt.Errorf("money: subtract overflows int64: %d - %d: %w", a.minor, b.minor, ErrRange)
 	}
 	return Amount{minor: diff, currency: a.currency}, nil
 }
@@ -119,7 +144,7 @@ func (a Amount) Mul(n int64) (Amount, error) {
 		maxMag = 1 << 63
 	}
 	if hi != 0 || lo > maxMag {
-		return Amount{}, fmt.Errorf("money: multiply overflows int64: %d * %d", a.minor, n)
+		return Amount{}, fmt.Errorf("money: multiply overflows int64: %d * %d: %w", a.minor, n, ErrRange)
 	}
 	p := int64(lo)
 	if neg {
@@ -132,10 +157,14 @@ func (a Amount) Mul(n int64) (Amount, error) {
 // same base count and distributing the remainder one minor unit at a time
 // to the earliest parts, so that the returned parts always sum to a
 // exactly — including for negative amounts. It returns an error when
-// n <= 0.
+// n <= 0. To prevent OOM from unbounded slices, n is capped at 1_000_000
+// (make([]Amount, n) would otherwise be attacker-controlled).
 func (a Amount) Alloc(n int) ([]Amount, error) {
 	if n <= 0 {
-		return nil, fmt.Errorf("money: Alloc: n must be positive, got %d", n)
+		return nil, fmt.Errorf("money: Alloc: n must be positive, got %d: %w", n, ErrBadFormat)
+	}
+	if n > 1_000_000 {
+		return nil, fmt.Errorf("money: Alloc n too large: %d (cap 1_000_000): %w", n, ErrRange)
 	}
 	base := a.minor / int64(n)
 	rem := a.minor % int64(n)
@@ -159,14 +188,24 @@ func (a Amount) Alloc(n int) ([]Amount, error) {
 // and NewAmount(123456, JPY).String() == "123456 JPY". Negative amounts
 // keep their sign and fractional digits are zero-padded to full exponent
 // width, so String is canonical and round-trips through ParseAmount.
+// If the currency exponent is outside [0,18] (invalid/deserialized), String
+// falls back to raw minor units to avoid divide-by-zero from pow10 overflow.
 func (a Amount) String() string {
+	exp := a.currency.Exponent
+	if exp < 0 || exp > 18 {
+		return fmt.Sprintf("%d %s", a.minor, a.currency.Code)
+	}
 	var sb strings.Builder
 	um := abs64(a.minor)
 	if a.minor < 0 {
 		sb.WriteByte('-')
 	}
-	if exp := a.currency.Exponent; exp > 0 {
+	if exp > 0 {
 		div := uint64(pow10(exp))
+		// pow10 is guaranteed >0 for 0<=exp<=18, but guard anyway.
+		if div == 0 {
+			return fmt.Sprintf("%d %s", a.minor, a.currency.Code)
+		}
 		sb.WriteString(strconv.FormatUint(um/div, 10))
 		sb.WriteByte('.')
 		frac := strconv.FormatUint(um%div, 10)
@@ -190,12 +229,12 @@ func (a Amount) String() string {
 func ParseAmount(s string) (Amount, error) {
 	sp := strings.LastIndexByte(s, ' ')
 	if sp < 0 {
-		return Amount{}, fmt.Errorf("money: ParseAmount(%q): missing currency code", s)
+		return Amount{}, fmt.Errorf("money: ParseAmount(%q): missing currency code: %w", s, ErrBadFormat)
 	}
 	numStr, codeStr := s[:sp], s[sp+1:]
 	c, ok := byCode[codeStr]
 	if !ok {
-		return Amount{}, fmt.Errorf("money: ParseAmount(%q): unknown currency %q", s, codeStr)
+		return Amount{}, fmt.Errorf("money: ParseAmount(%q): unknown currency %q: %w", s, codeStr, ErrBadFormat)
 	}
 
 	body := numStr
@@ -204,26 +243,48 @@ func ParseAmount(s string) (Amount, error) {
 		body = body[1:]
 	}
 	intPart, fracPart, hasDot := strings.Cut(body, ".")
+	if hasDot && fracPart == "" {
+		return Amount{}, fmt.Errorf("money: ParseAmount(%q): trailing dot in %q: %w", s, numStr, ErrBadFormat)
+	}
 	if !allDigits(intPart) || intPart == "" || (hasDot && !allDigits(fracPart)) {
-		return Amount{}, fmt.Errorf("money: ParseAmount(%q): malformed number %q", s, numStr)
+		return Amount{}, fmt.Errorf("money: ParseAmount(%q): malformed number %q: %w", s, numStr, ErrBadFormat)
 	}
 	if len(fracPart) != c.Exponent {
 		return Amount{}, fmt.Errorf(
-			"money: ParseAmount(%q): %s needs exactly %d fractional digits, got %q",
-			s, c.Code, c.Exponent, numStr)
+			"money: ParseAmount(%q): %s needs exactly %d fractional digits, got %q: %w",
+			s, c.Code, c.Exponent, numStr, ErrBadFormat)
 	}
-	minor, err := strconv.ParseInt(intPart+fracPart, 10, 64)
+	digits := intPart + fracPart
+	// Parse magnitude as unsigned to allow MinInt64 (-2^63) round-trip.
+	u, err := strconv.ParseUint(digits, 10, 64)
 	if err != nil {
-		return Amount{}, fmt.Errorf("money: ParseAmount(%q): out of range: %w", s, err)
+		return Amount{}, fmt.Errorf("money: ParseAmount(%q): out of range: %w: %w", s, err, ErrRange)
 	}
+	var minor int64
 	if neg {
-		minor = -minor
+		if u > 1<<63 {
+			return Amount{}, fmt.Errorf("money: ParseAmount(%q): out of range: %w", s, ErrRange)
+		}
+		if u == 1<<63 {
+			minor = math.MinInt64
+		} else {
+			minor = -int64(u)
+		}
+	} else {
+		if u > math.MaxInt64 {
+			return Amount{}, fmt.Errorf("money: ParseAmount(%q): out of range: %w", s, ErrRange)
+		}
+		minor = int64(u)
 	}
 	return Amount{minor: minor, currency: c}, nil
 }
 
-// pow10 returns 10^e for small non-negative exponents.
+// pow10 returns 10^e for small non-negative exponents. For e outside
+// [0,18] it returns 0 to signal overflow (caller must guard).
 func pow10(e int) int64 {
+	if e < 0 || e > 18 {
+		return 0
+	}
 	p := int64(1)
 	for range e {
 		p *= 10

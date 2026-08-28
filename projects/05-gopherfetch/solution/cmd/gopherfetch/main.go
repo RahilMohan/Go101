@@ -28,7 +28,7 @@ func main() {
 }
 
 func run() int {
-	workers := flag.Int("c", 8, "number of concurrent workers")
+	workers := flag.Int("c", 8, "number of concurrent workers (capped to 256)")
 	timeout := flag.Duration("timeout", 10*time.Second, "per-request timeout")
 	rate := flag.Duration("rate", 0, "minimum interval between request starts (0 = unlimited)")
 	flag.Parse()
@@ -36,6 +36,10 @@ func run() int {
 		fmt.Fprintln(os.Stderr, "gopherfetch: no URLs given")
 		flag.Usage()
 		return 2
+	}
+	if *workers > 256 {
+		fmt.Fprintf(os.Stderr, "gopherfetch: workers %d capped to 256\n", *workers)
+		*workers = 256
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)

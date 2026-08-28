@@ -738,9 +738,11 @@ err = sc.<span class="fn">Validate</span>(tt.val)
      (<code>Items[1].Code</code>), a map value (<code>ByID[k].Code</code>), and a pointer element
      (<code>Ptrs[0].Code</code>) while keeping a nil pointer element legal
      (<code>Ptrs[1] = nil</code>), then runs the whole thing through both engines and finishes by
-     confirming scalar collections still validate length-only.</p>
+      confirming scalar collections still validate length-only. Huge collections
+      (10k+ elements) and deeply nested structs are correct but linear in cost — each element
+      is visited — so callers should Validate before expanding untrusted input sizes.</p>
 
-  <h3>Benchmark methodology — the honesty note</h3>
+   <h3>Benchmark methodology — the honesty note</h3>
   <div class="callout">
     <p><strong>The note:</strong> both benchmarks validate the <em>same value</em> through the
        <em>same execution engine</em> (<code>structPlan.run</code> + <code>checkLeaf</code>).

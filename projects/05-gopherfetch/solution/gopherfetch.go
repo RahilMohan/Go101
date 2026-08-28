@@ -6,11 +6,20 @@
 // limiting with a ticker, and deterministic output: results land at the
 // index of their input URL, so callers always get input order no matter
 // what order requests complete in.
+//
+// Security note (teaching scope): Checker performs no SSRF filtering and
+// follows redirects (up to maxRedirects) to any host. A public URL that
+// redirects to a private IP (loopback, 10/8, 169.254.169.254, link-local,
+// etc.) can launder probes to internal networks via the redirect follower.
+// This is an intentional teaching-scope limitation, not a production-
+// hardened fetcher. Production deployments must sanitize URLs or add a
+// DialContext filter that rejects private/link-local ranges before use.
 package solution
 
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -24,6 +33,12 @@ var ErrNoWorkers = errors.New("gopherfetch: worker count must be positive")
 // last response as-is (link checkers care about "is this link OK", not
 // about chasing arbitrary redirect chains).
 const maxRedirects = 3
+
+// maxWorkers caps the worker pool and idle-connection pool to bound
+// goroutines and file descriptors. Callers requesting more workers are
+// silently clamped; workers <= 0 still surfaces as ErrNoWorkers at Check
+// time. The cap is documented here and in NewChecker.
+const maxWorkers = 256
 
 // Result is the outcome of checking a single URL.
 type Result struct {
@@ -43,14 +58,23 @@ type Checker struct {
 // NewChecker returns a Checker running at most `workers` goroutines
 // (workers <= 0 -> error at Check time). Each in-flight request gets a
 // per-request timeout derived from timeout (<= 0 means no per-request
-// timeout).
+// timeout). workers is capped to maxWorkers (256) to bound goroutines and
+// idle connections; larger values are clamped. Workers > 1000 would also be
+// clamped to the same cap (effectively capped, not unbounded).
 func NewChecker(workers int, timeout time.Duration) *Checker {
+	idleConns := workers
+	if idleConns < 0 {
+		idleConns = 0
+	}
+	if idleConns > maxWorkers {
+		idleConns = maxWorkers
+	}
 	return &Checker{
 		workers: workers,
 		timeout: timeout,
 		client: &http.Client{
 			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-				if len(via) >= maxRedirects {
+				if len(via) > maxRedirects {
 					return http.ErrUseLastResponse // report the 3xx instead of following hop four
 				}
 				return nil
@@ -58,8 +82,9 @@ func NewChecker(workers int, timeout time.Duration) *Checker {
 			Transport: &http.Transport{
 				// Idle-connection pooling is per host; sizing it to the
 				// pool avoids churn when every worker hits the same host.
-				MaxIdleConns:        workers,
-				MaxIdleConnsPerHost: workers,
+				// Capped to maxWorkers; negative workers yields 0 (default).
+				MaxIdleConns:        idleConns,
+				MaxIdleConnsPerHost: idleConns,
 			},
 		},
 	}
@@ -88,6 +113,13 @@ func (c *Checker) CheckRateLimited(ctx context.Context, urls []string, interval 
 // results that cancellation left unfilled.
 func (c *Checker) run(ctx context.Context, urls []string, interval time.Duration) []Result {
 	results := make([]Result, len(urls))
+	if ctx == nil {
+		err := errors.New("gopherfetch: nil context")
+		for i := range results {
+			results[i] = Result{URL: urls[i], Err: err}
+		}
+		return results
+	}
 	if c.workers <= 0 {
 		for i := range results {
 			results[i] = Result{URL: urls[i], Err: ErrNoWorkers}
@@ -100,13 +132,18 @@ func (c *Checker) run(ctx context.Context, urls []string, interval time.Duration
 		return results
 	}
 
+	workers := c.workers
+	if workers > maxWorkers {
+		workers = maxWorkers
+	}
+
 	// Workers own disjoint indices of results, so they never contend on a
 	// slice element; wg.Wait below gives the happens-before edge that lets
 	// the dispatcher read every slot safely afterward.
 	jobs := make(chan int)
 	var wg sync.WaitGroup
-	wg.Add(min(c.workers, n))
-	for range min(c.workers, n) {
+	wg.Add(min(workers, n))
+	for range min(workers, n) {
 		go func() {
 			defer wg.Done()
 			for idx := range jobs {
@@ -161,6 +198,9 @@ dispatch:
 // context derives from ctx, so both caller cancellation and the optional
 // per-request timeout reach the transport.
 func (c *Checker) doOne(ctx context.Context, url string) Result {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reqCtx := ctx
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
@@ -183,6 +223,7 @@ func (c *Checker) doOne(ctx context.Context, url string) Result {
 		res.Err = err // connection refused, timeout, canceled context, ...
 		return res
 	}
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	res.Status = resp.StatusCode // non-2xx is data, not an error
 	return res

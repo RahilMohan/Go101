@@ -506,9 +506,12 @@ target, err := sv.store.<span class="fn">Resolve</span>(r.<span class="fn">PathV
     <span class="kw">return func</span>(next http.<span class="typ">Handler</span>) http.<span class="typ">Handler</span> {
         <span class="kw">return</span> http.<span class="fn">HandlerFunc</span>(<span class="kw">func</span>(rw http.<span class="typ">ResponseWriter</span>, r *http.<span class="typ">Request</span>) {
             start := time.<span class="fn">Now</span>()
-            rec := &amp;<span class="typ">statusRecorder</span>{<span class="typ">ResponseWriter</span>: rw, status: http.StatusOK}
+            rec := &amp;<span class="typ">statusRecorder</span>{<span class="typ">ResponseWriter</span>: rw}
             next.<span class="fn">ServeHTTP</span>(rec, r)
-            fmt.<span class="fn">Fprintf</span>(w, <span class="str">"%s %s %d %v\n"</span>, r.Method, r.URL.Path, rec.status, time.<span class="fn">Since</span>(start))
+            status := rec.status; <span class="kw">if</span> status == <span class="num">0</span> { status = http.StatusOK }
+            path := strings.<span class="fn">ReplaceAll</span>(r.URL.Path, <span class="str">"\n"</span>, <span class="str">"%0A"</span>)
+            path = strings.<span class="fn">ReplaceAll</span>(path, <span class="str">"\r"</span>, <span class="str">"%0D"</span>)
+            fmt.<span class="fn">Fprintf</span>(w, <span class="str">"%s %s %d %v\n"</span>, r.Method, path, status, time.<span class="fn">Since</span>(start))
         })
     }
 }</code></pre>
@@ -519,8 +522,14 @@ target, err := sv.store.<span class="fn">Resolve</span>(r.<span class="fn">PathV
      why middleware written this way composes across all of them. Note the
      <code>statusRecorder</code> trick: <code>http.ResponseWriter</code> offers no way to ask
      "what status did I write?", so the logger wraps it, records the code in
-     <code>WriteHeader</code>, and passes the wrapper downstream. Composition is visible in one
-     line — <code>RequestLogger(...)(Recoverer(...)(mux))</code> — and changing execution order
+     <code>WriteHeader</code> (and in <code>Write</code> for the implicit 200), and passes the wrapper downstream.
+     The wrapper forwards optional interfaces — <code>Flush</code> and <code>Hijack</code> via type assertion —
+     so SSE/WebSocket handlers don't break through generic middleware, and it sanitizes both
+     <code>\n</code> → <code>%0A</code> and <code>\r</code> → <code>%0D</code> in the logged path to block
+     log-line forgery (carriage return alone can split lines on some collectors). The companion
+     <code>Recoverer</code> also wraps in a <code>statusRecorder</code> and checks <code>rec.status == 0</code>
+     before writing its 500 JSON, avoiding a double-write when a panic occurs after headers were already sent.
+     Composition is visible in one line — <code>RequestLogger(...)(Recoverer(...)(mux))</code> — and changing execution order
      is literally reordering those calls.</p>
 
   <h3>Placeholders vs concatenation: why ? is not a style choice</h3>

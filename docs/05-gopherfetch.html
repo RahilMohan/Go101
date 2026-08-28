@@ -348,8 +348,9 @@
         followed only through three; the final reported status is the third hop's 302, and the
         destination URL is provably never requested.</li>
     <li><strong>R7 — Rate limiting spaces request starts.</strong> Six requests at a 30ms
-        interval take at least ~150ms total — an unthrottled implementation finishes in
-        milliseconds and fails the bound.</li>
+        interval take nominally 150ms ((n-1)*interval); the test asserts at least ~75ms
+        (half the nominal, to absorb scheduler jitter under <code>-race</code>) — an
+        unthrottled implementation finishes in milliseconds and fails the bound.</li>
     <li><strong>R8 — Invalid worker count errors per-result, not by panicking.</strong>
         <code>NewChecker(0 or negative, …)</code>'s Check returns one errored Result per URL
         (wrapping <code>ErrNoWorkers</code>) instead of crashing.</li>
@@ -421,6 +422,7 @@ results[idx] = c.<span class="fn">doOne</span>(ctx, urls[idx])   <span class="co
   <h3>D3: Filled-marker repair on cancellation</h3>
   <pre><code>filled := <span class="fn">make</span>([]<span class="typ">bool</span>, n)
 
+<span class="com">// ... rate-limiting ticker wait elided for clarity — see Ticker walkthrough ...</span>
 dispatch:
     <span class="kw">for</span> idx := <span class="kw">range</span> n {
         <span class="kw">select</span> {
@@ -453,28 +455,35 @@ wg.<span class="fn">Wait</span>()
      CLI's per-line reporting possible.</p>
 
   <h3>D4: Shared Transport sized to the pool</h3>
-  <pre><code>client: &amp;http.<span class="typ">Client</span>{
+  <pre><code><span class="com">// idleConns is workers clamped to [0, maxWorkers=256] to bound FDs;</span>
+<span class="com">// negative workers yields 0 (Transport default).</span>
+idleConns := workers
+<span class="kw">if</span> idleConns &lt; <span class="num">0</span> { idleConns = <span class="num">0</span> }
+<span class="kw">if</span> idleConns &gt; maxWorkers { idleConns = maxWorkers }
+client: &amp;http.<span class="typ">Client</span>{
     Transport: &amp;http.<span class="typ">Transport</span>{
         <span class="com">// Idle-connection pooling is per host; sizing it to the</span>
         <span class="com">// pool avoids churn when every worker hits the same host.</span>
-        MaxIdleConns:        workers,
-        MaxIdleConnsPerHost: workers,
+        MaxIdleConns:        idleConns,
+        MaxIdleConnsPerHost: idleConns,
     },
 }</code></pre>
   <p>All workers share one client, and therefore one connection pool — the default Transport
      keeps only 2 idle connections <em>per host</em>, so eight workers hammering one server would
      constantly close and re-open TCP connections (and TLS handshakes) that should have been
-     reused. Setting both idle caps to <code>workers</code> lets every worker keep its warm
-     connection alive. This is also why <code>CloseIdleConnections()</code> exists on Checker:
-     pooled keep-alive connections each hold a reader goroutine, and the leak test can't get a
-     clean baseline unless the pool can be deliberately drained — a real concern for long-lived
-     processes too, not just tests.</p>
+     reused. Setting both idle caps to <code>idleConns</code> (workers clamped to
+     <code>maxWorkers=256</code>, negative yielding <code>0</code>) lets every worker keep its warm
+     connection alive while bounding FDs; values above 256 are clamped, and workers &gt; 1000 are
+     equally capped rather than spawning unbounded goroutines. This is also why
+     <code>CloseIdleConnections()</code> exists on Checker: pooled keep-alive connections each hold
+     a reader goroutine, and the leak test can't get a clean baseline unless the pool can be
+     deliberately drained — a real concern for long-lived processes too, not just tests.</p>
 
   <h3>D5: HEAD requests and the redirect cap</h3>
   <pre><code>req, err := http.<span class="fn">NewRequestWithContext</span>(reqCtx, http.<span class="typ">MethodHead</span>, url, <span class="kw">nil</span>)
 ...
 CheckRedirect: <span class="kw">func</span>(_ *http.<span class="typ">Request</span>, via []*http.<span class="typ">Request</span>) <span class="typ">error</span> {
-    <span class="kw">if</span> len(via) &gt;= maxRedirects {
+    <span class="kw">if</span> len(via) &gt; maxRedirects {
         <span class="kw">return</span> http.<span class="typ">ErrUseLastResponse</span>  <span class="com">// report the 3xx instead of following hop four</span>
     }
     <span class="kw">return</span> <span class="kw">nil</span>
@@ -489,6 +498,12 @@ CheckRedirect: <span class="kw">func</span>(_ *http.<span class="typ">Request</s
      <code>reqCtx</code> — derived from the caller's context — so cancellation and the optional
      per-request timeout both reach the transport layer, where they can actually interrupt
      in-flight network I/O.</p>
+  <div class="callout"><p><strong>Teaching-scope security note:</strong> the checker performs no SSRF filtering
+     and follows redirects to any host. A public URL that 302s to
+     <code>http://169.254.169.254/</code> or <code>127.0.0.1</code> will be fetched; an attacker
+     controlling one redirect can thus launder probes to private/link-local networks. This is
+     intentional for the teaching project — production deployments must sanitize URLs or add a
+     <code>DialContext</code> filter rejecting private ranges before use.</p></div>
 
   <h3>D6: Library core, thin command shell</h3>
   <pre><code>projects/05-gopherfetch/
@@ -500,7 +515,7 @@ CheckRedirect: <span class="kw">func</span>(_ *http.<span class="typ">Request</s
   <p>The library knows nothing about terminals; <code>main</code> knows nothing about channels.
      The CLI adds flags (<code>-c</code> workers, <code>-timeout</code>,
      <code>-rate</code>), wires <code>signal.NotifyContext</code> so Ctrl-C cancels the run
-     mid-flight, and renders the taxonomy:</p>
+      mid-flight, and renders the taxonomy (example output — spacing via <code>%-4d %-6s</code>):</p>
   <pre><code>OK   200  12ms  https://x
 SKIP 0    0s    https://y  context canceled
 FAIL 0    3ms   https://z  Get "https://z": connection refused</code></pre>
