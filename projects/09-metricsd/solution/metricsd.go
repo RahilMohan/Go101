@@ -213,7 +213,13 @@ func (c *Collector) Snapshot(w io.Writer) error {
 	}
 	gauges := make(map[string]float64, len(c.gauges))
 	for n, g := range c.gauges {
-		gauges[n] = *g.Load()
+		// Robust nil guard: publication is via write-lock Store before
+		// Unlock so Load normally never returns nil, but a future
+		// refactor reordering map insert vs Store would panic without
+		// this check (C3).
+		if p := g.Load(); p != nil {
+			gauges[n] = *p
+		}
 	}
 	histos := make(map[string]*histogram, len(c.histos))
 	for n, h := range c.histos {
@@ -320,10 +326,13 @@ type Scraper struct {
 }
 
 // NewScraper returns a scraper reporting scraped values into c. If
-// client is nil, http.DefaultClient is used.
+// client is nil, a client with a 10s timeout is used (DefaultClient has
+// no timeout — one stalled target would otherwise freeze all scraping).
+// Caller-supplied clients should set Timeout (e.g. 10s) to bound
+// per-request duration; the daemon binary does this via -scrape-timeout.
 func NewScraper(c *Collector, client *http.Client) *Scraper {
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: 10 * time.Second}
 	}
 	return &Scraper{
 		collector: c,
@@ -339,8 +348,12 @@ func NewScraper(c *Collector, client *http.Client) *Scraper {
 // increment collector counter "<name>_errors" and skip the buffer
 // write. Calling Start more than once is undefined. Stop must happen
 // after Start (the cancel field is unsynchronized by design — set only
-// in Start, read only in Stop).
+// in Start, read only in Stop). If interval <= 0 a 1s default is used
+// to avoid panicking via time.NewTicker (see C1).
 func (s *Scraper) Start(ctx context.Context, targets []ScrapeTarget, interval time.Duration) {
+	if interval <= 0 {
+		interval = time.Second
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 
@@ -423,8 +436,20 @@ func (s *Scraper) scrapeOne(ctx context.Context, tg ScrapeTarget) {
 }
 
 // jsonPathValue walks a dotted path ("workers.active") through decoded
-// JSON maps and converts the leaf to float64.
+// JSON maps and converts the leaf to float64. An empty path means the
+// root itself must be a number (C2 — gracefully handles "" without
+// panicking and without probing for key "").
 func jsonPathValue(root any, path string) (float64, error) {
+	if path == "" {
+		switch n := root.(type) {
+		case json.Number:
+			return n.Float64()
+		case float64:
+			return n, nil
+		default:
+			return 0, fmt.Errorf("json path %q: empty path requires numeric root, got %T", path, root)
+		}
+	}
 	cur := root
 	for _, part := range strings.Split(path, ".") {
 		m, ok := cur.(map[string]any)

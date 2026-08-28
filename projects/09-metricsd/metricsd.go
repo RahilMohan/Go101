@@ -5,12 +5,28 @@
 // sync/atomic operations, lock-free writes, fixed-capacity ring
 // buffers, tick-disciplined background loops, and the Prometheus text
 // exposition format.
+//
+// Teaching scope / abuse caveats (see fleet abuse review):
+//   - Cardinality is unbounded: each distinct Inc/Add/SetGauge/Observe
+//     name and each ScrapeTarget.Name grows maps/rings without eviction.
+//     Callers must bound distinct names and target count (e.g. <10k).
+//     Production registries cap cardinality and validate names.
+//   - Rings are bounded per-target (ringSize=64) but unbounded in count.
+//     Goroutines per tick = len(targets) — cap targets (e.g. 256) and
+//     bound bodies via LimitReader if hardening.
+//   - Scrape timeout is bounded: NewScraper defaults to 10s when client
+//     is nil; daemon binary passes -scrape-timeout (default 10s) via
+//     http.Client{Timeout}. Always supply a client with Timeout; a nil/
+//     zero timeout would let one hung target freeze scrapeAll via wg.Wait.
 package metricsd
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -60,6 +76,10 @@ func (c *Collector) Observe(name string, v float64, bucketBounds []float64) {
 // each histogram cumulative "name_bucket{le=\"b\"} N" lines plus
 // _sum/_count lines. Names are emitted in sorted order within each
 // section (counters, then gauges, then histograms).
+//
+// C3: gauge loads must nil-check (if p := g.Load(); p != nil) because
+// publication order (map insert + Store under write lock) is fragile
+// across refactors; Snapshot in the reference solution is hardened.
 func (c *Collector) Snapshot(w io.Writer) error {
 	// TODO: Implement
 	return nil
@@ -69,7 +89,7 @@ func (c *Collector) Snapshot(w io.Writer) error {
 type ScrapeTarget struct {
 	Name     string
 	URL      string
-	JSONPath string // simple dotted path into a JSON object, e.g. "workers.active"
+	JSONPath string // simple dotted path into a JSON object, e.g. "workers.active"; empty means root must be numeric
 }
 
 // Point is one scraped sample.
@@ -84,9 +104,16 @@ type Scraper struct {
 }
 
 // NewScraper returns a scraper reporting scraped values into c. If
-// client is nil, http.DefaultClient is used.
+// client is nil, a 10s-timeout client is used (DefaultClient has no
+// timeout — one stalled body would freeze all scraping). Callers that
+// supply a client should set Timeout (10s default in cmd/metricsd).
 func NewScraper(c *Collector, client *http.Client) *Scraper {
-	// TODO: Implement
+	// TODO: Implement — reference solution defaults nil to
+	// &http.Client{Timeout: 10*time.Second} for C1/abuse hardening.
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	_ = client
 	return &Scraper{}
 }
 
@@ -98,8 +125,16 @@ func NewScraper(c *Collector, client *http.Client) *Scraper {
 // write. Calling Start more than once is undefined. Stop must happen
 // after Start (the cancel field is unsynchronized by design — set only
 // in Start, read only in Stop).
+//
+// C1: interval <= 0 is guarded to 1s to avoid time.NewTicker panic.
+// Reference solution does: if interval <= 0 { interval = time.Second }.
 func (s *Scraper) Start(ctx context.Context, targets []ScrapeTarget, interval time.Duration) {
-	// TODO: Implement
+	// TODO: Implement — guard: if interval <= 0 { interval = time.Second }
+	if interval <= 0 {
+		interval = time.Second
+	}
+	_ = ctx
+	_ = targets
 }
 
 // History returns the ring contents oldest->newest for target name as
@@ -124,3 +159,41 @@ func Handler(c *Collector, s *Scraper) http.Handler {
 	// TODO: Implement
 	return nil
 }
+
+// jsonPathValue is the reference helper for dotted-path extraction.
+// C2: empty path gracefully returns root numeric value or error — no
+// panic, no probe for key "" via strings.Split("", ".").
+func jsonPathValue(root any, path string) (float64, error) {
+	if path == "" {
+		switch n := root.(type) {
+		case json.Number:
+			return n.Float64()
+		case float64:
+			return n, nil
+		default:
+			return 0, fmt.Errorf("json path %q: empty path requires numeric root, got %T", path, root)
+		}
+	}
+	cur := root
+	for _, part := range strings.Split(path, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return 0, fmt.Errorf("json path %q: %q is not inside an object", path, part)
+		}
+		var ok2 bool
+		cur, ok2 = m[part]
+		if !ok2 {
+			return 0, fmt.Errorf("json path %q: key %q not found", path, part)
+		}
+	}
+	switch n := cur.(type) {
+	case json.Number:
+		return n.Float64()
+	case float64:
+		return n, nil
+	default:
+		return 0, fmt.Errorf("json path %q: leaf is %T, want number", path, cur)
+	}
+}
+
+var _ = io.Discard

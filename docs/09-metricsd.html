@@ -473,10 +473,10 @@ ctr.<span class="fn">Add</span>(v)</code></pre>
       target delays everyone's <em>next</em> tick, and the fan-out bound is simply
       <code>len(targets)</code>, so no worker
       pool machinery is needed. That head-of-line blocking is bounded rather than fatal: the
-      daemon passes a custom <code>http.Client{Timeout}</code> driven by the
-      <code>-scrape-timeout</code> flag (default 10s), so a stalled target fails after the
-      timeout, increments its <code>&lt;name&gt;_errors</code> counter, and can never freeze
-      all collection indefinitely. Every HTTP request carries the loop's context, so
+      daemon (<code>cmd/metricsd</code>, not the library) passes a custom <code>http.Client{Timeout}</code> driven by the
+       <code>-scrape-timeout</code> flag (default 10s), so a stalled target fails after the
+       timeout, increments its <code>&lt;name&gt;_errors</code> counter, and can never freeze
+       all collection indefinitely. The library itself defaults a nil client to <code>10s</code> and guards <code>interval &lt;= 0</code> to <code>1s</code> (C1) to avoid <code>time.NewTicker</code> panics. Every HTTP request carries the loop's context, so
      <code>Stop</code>'s cancel reaches into any in-flight fetch. Two lifecycle rules are
      documented on the API itself: calling <code>Start</code> twice is undefined, and
      <code>Stop</code> must happen-after <code>Start</code> — the <code>cancel</code> field is
@@ -509,7 +509,11 @@ mux.<span class="fn">HandleFunc</span>(<span class="str">"GET /history/{name}"</
      metric names are written verbatim
      into the exposition output with no validation — a caller passing a name with spaces or
      newlines could produce malformed format. Production libraries validate; this project
-     trusts its caller and spends the budget on the concurrency lessons instead.</p>
+      trusts its caller and spends the budget on the concurrency lessons instead.</p>
+
+  <div class="callout">
+    <p><strong>Teaching-scope caveats (abuse review):</strong> cardinality is unbounded — each distinct metric name and each <code>ScrapeTarget.Name</code> grows <code>Collector</code> maps and <code>rings</code> without eviction, and <code>scrapeAll</code> fans out <code>len(targets)</code> goroutines per tick. Production registries cap distinct names/targets (e.g. 10k/256), validate names against <code>^[a-zA-Z_:][a-zA-Z0-9_:]*$</code>, and bound response bodies with <code>io.LimitReader</code>. Histogram bucket counts and JSON bodies are likewise caller-bounded in this project. The <strong>scrape timeout is bounded</strong>: <code>NewScraper(nil)</code> defaults to <code>10s</code> and <code>cmd/metricsd</code> injects <code>http.Client{Timeout: 10s}</code> (flag <code>-scrape-timeout</code>), so one hung target delays the next tick by at most the timeout. Empty <code>JSONPath</code> is handled gracefully (root-numeric) and gauge snapshot nil-loads are guarded (C2/C3).</p>
+  </div>
 </section>
 
 <!-- ===================== 4. CONCEPT WALKTHROUGHS ===================== -->
