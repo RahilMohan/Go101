@@ -25,23 +25,34 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('projects/**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Verify formatting
+      - name: Verify formatting (all projects)
         run: |
-          fmt_out=$(gofmt -l .)
-          if [ -n "$fmt_out" ]; then
-            echo "gofmt failures:"
-            echo "$fmt_out"
-            exit 1
-          fi
+          for dir in projects/*/; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "Checking fmt in $dir"
+              fmt_out=$(cd "$dir" && gofmt -l .)
+              if [ -n "$fmt_out" ]; then
+                echo "gofmt failures in $dir:"
+                echo "$fmt_out"
+                exit 1
+              fi
+            fi
+          done
 
-      - name: Vet
-        run: go vet ./...
+      - name: Vet (all projects)
+        run: |
+          for dir in projects/*/; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "Vetting $dir"
+              (cd "$dir" && go vet ./...)
+            fi
+          done
 
-      - name: Test all projects (with race detector)
+      - name: Test all solutions (with race detector)
         run: |
           for dir in projects/*/solution; do
             if [ -f "$dir/go.mod" ]; then
