@@ -1,0 +1,9 @@
+# Auto-request reviews for all PRs
+* @baldur10
+
+# Documentation changes - request review
+/docs/ @baldur10
+
+# Agent workflow changes
+/AGENTS.md @baldur10
+/design.md @baldur10

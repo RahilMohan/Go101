@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (Go 1.22)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Cache modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Verify formatting
+        run: |
+          fmt_out=$(gofmt -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "gofmt failures:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test all projects (with race detector)
+        run: |
+          for dir in projects/*/solution; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "Testing $dir"
+              (cd "$dir" && go test -race ./...)
+            fi
+          done
+
+      - name: Test stub packages (should fail until implemented)
+        run: |
+          for dir in projects/*/; do
+            if [ -f "$dir/go.mod" ] && [ -d "$dir/solution" ]; then
+              echo "Testing stubs in $dir"
+              (cd "$dir" && go test ./... 2>&1 | head -20) || true
+            fi
+          done
